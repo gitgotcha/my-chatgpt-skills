@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "session_id": "MOCK-20260806-001",
+  "candidate_id": "TEST-20260806-001",
+  "source_type": "mock_interview",
+  "evidence_type": "system_transcript",
+  "evidence_confidence": 0.6,
+  "questions": [],
+  "state": "review_pending"
+}

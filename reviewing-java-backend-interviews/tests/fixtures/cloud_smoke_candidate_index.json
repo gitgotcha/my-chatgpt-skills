@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "candidates": [
+    {
+      "schema_version": "1.0",
+      "candidate_id": "TEST-20260806-001",
+      "display_name": "云端烟测候选人",
+      "distinguishing_note": "完全虚构；仅用于隔离验证"
+    }
+  ]
+}
