@@ -1,0 +1,1 @@
+{"schema_version":"1.0","artifacts":["CandidateSummary","Candidate","CandidateIndex","ResumeIndex","ResumeMetadata","ResumeClaims","ConfirmedCandidateContext","QuestionAnswer","InterviewSession","Review","CandidateProfile","ProfileUpdateEvent","CorrectionEvent","CommitRecoveryState"]}

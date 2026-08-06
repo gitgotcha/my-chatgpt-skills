@@ -1,0 +1,4 @@
+interface:
+  display_name: "模拟面试"
+  short_description: "确认候选人后执行模拟面试并安全交接统一复盘。"
+  default_prompt: "使用 $conducting-java-backend-mock-interviews，先确认候选人，再根据已选简历模拟面试。"
