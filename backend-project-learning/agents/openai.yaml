@@ -1,0 +1,4 @@
+interface:
+  display_name: "后端项目学习教练"
+  short_description: "按真实源码系统学习后端项目并训练面试表达与沟通能力提升"
+  default_prompt: "请结合真实源码带我学习业务流程，并进行后端面试标准答案与 STAR 口述训练。"
