@@ -87,3 +87,24 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 - 代码是否可提交，复杂度是否完整？
 - 反例、替代方案和剪枝是否真实适用且解释了正确性？
 - 是否以可迁移的复习要点收尾？
+
+## 个人算法画像与每日练习
+
+此子系统不改变答疑内容和答案揭示程度。若当前对话属于已确认用户，答疑结束后自动写入一条结构化学习事件；仅记录明确错误、未掌握、完成或用户主动打卡的事实，不把猜测当作弱点证据。
+
+1. 首次使用画像功能时，先取得 `username`，系统生成 UUID 形式 `userId`，展示二者并要求确认。未确认前不得读取或写入该用户详情。
+2. 后续每次读写都同时校验 `userId` 与 `username`；不匹配立即停止，切换用户必须重新确认。
+3. 云端根目录由本次用户确认或独立定时任务提示提供。真实数据只能写入 `users/<userId>/`；不可跨用户读取。
+4. 事件、镜像、题单与打卡格式见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。Google Drive 读写、冲突和初始化约定见 [references/google-drive-runtime.md](references/google-drive-runtime.md)。
+5. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为学习事件；未完成题在下一日优先保留。
+6. 每日独立任务按 [references/algorithm-daily-protocol.md](references/algorithm-daily-protocol.md) 运行。它生成 3～5 题：完整包优先为 1 道薄弱复习、2 道当前专题、2 道综合/变式；有未完成题时先保留它们并压缩新题。
+7. 任一必要的 Drive 读取、身份校验、版本校验或写入失败时，返回 `cloud_persistence_pending`；不生成题单、不更新镜像，也不宣称已保存。
+
+## 专项检查与回答前检查
+
+回溯、动态规划、二叉树或图题读取 [references/special-topic-checklists.md](references/special-topic-checklists.md) 的对应部分；不要把不适用项强加给答案。
+
+- 是否真正定位到用户代码的问题，并保持最小修改？
+- 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
+- 事件是否只记录明确证据，并绑定已确认的 userId？
+- 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？
