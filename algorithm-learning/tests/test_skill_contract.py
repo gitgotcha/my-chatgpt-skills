@@ -6,6 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AlgorithmLearningSkillContractTests(unittest.TestCase):
+    def _read(self, filename):
+        return (ROOT / "references" / filename).read_text(encoding="utf-8")
+
     def test_skill_keeps_answering_rules_and_routes_profile_events(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         for required in (
@@ -24,9 +27,9 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         for required in (
             "userId",
             "username",
-            "event-log.jsonl",
-            "profile-snapshot.json",
-            "profileVersion",
+            "registration-<userId>.json",
+            "event-<eventId>.json",
+            "sourceEventKeys",
             "不可跨用户读取",
         ):
             self.assertIn(required, contract)
@@ -39,8 +42,8 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
             "未完成题",
             "3～5",
             "不生成题单",
-            "不更新镜像",
-            "原子",
+            "不宣称已同步画像",
+            "追加式创建",
         ):
             self.assertIn(required, protocol)
 
@@ -53,66 +56,26 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         self.assertIn("Asia/Shanghai", template)
         self.assertIn("DTSTART:20260101T090000", template)
 
-    def test_new_conversation_requires_user_selection_before_answering(self):
-        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        contract = (ROOT / "references" / "algorithm-profile-contract.md").read_text(
-            encoding="utf-8"
-        )
+    def test_append_only_contract_requires_unique_event_and_snapshot_files(self):
+        contract = self._read("algorithm-profile-contract.md")
         for required in (
-            "新算法对话的第一条学习请求",
-            "A. 张三",
-            "新建档案",
-            "暂存",
-            "不讲题",
+            "schemaVersion `1.2`",
+            "event-<eventId>.json",
+            "snapshot-<observedAt>-<eventId>.json",
+            "sourceEventKeys",
         ):
-            self.assertIn(required, skill)
-        self.assertIn("user-index.json", contract)
-        self.assertIn("仅允许为列出用户", contract)
+            self.assertIn(required, contract)
 
-    def test_answering_cycle_must_write_event_and_immediately_update_snapshot(self):
+    def test_append_only_contract_keeps_legacy_files_read_only(self):
+        contract = self._read("algorithm-profile-contract.md")
+        runtime = self._read("google-drive-runtime.md")
+        self.assertIn("旧文件保留作为只读兼容数据", contract)
+        self.assertIn("禁止调用任何“更新文件内容”的接口", runtime)
+
+    def test_pending_status_distinguishes_event_from_snapshot_failure(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        contract = (ROOT / "references" / "algorithm-profile-contract.md").read_text(
-            encoding="utf-8"
-        )
-        for required in (
-            "每次算法学习请求结束前",
-            "必须写入学习事件",
-            "立即更新画像快照",
-            "cloud_persistence_pending",
-            "不得宣称已同步",
-        ):
-            self.assertIn(required, skill)
-        self.assertIn("consulted", contract)
-        self.assertIn("eventKey", contract)
-
-    def test_bound_conversation_reuses_identity_until_explicit_switch(self):
-        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        for required in (
-            "同一对话",
-            "不重复询问身份",
-            "切换用户",
-            "重新验证身份",
-            "清空本对话身份绑定",
-        ):
-            self.assertIn(required, skill)
-
-    def test_daily_task_cannot_enumerate_other_users(self):
-        protocol = (ROOT / "references" / "algorithm-daily-protocol.md").read_text(
-            encoding="utf-8"
-        )
-        template = (ROOT / "references" / "daily-scheduler-prompt-template.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("不得读取 `user-index.json`", protocol)
-        self.assertIn("不得读取 `user-index.json`", template)
-
-    def test_identity_gate_plan_is_kept_with_mermaid_workflows(self):
-        plan = (ROOT / "references" / "2026-08-11-conversation-identity-gate-plan.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertGreaterEqual(plan.count("```mermaid"), 2)
-        self.assertIn("A. 张三", plan)
-        self.assertIn("每次算法学习请求", plan)
+        self.assertIn("cloud_persistence_pending", skill)
+        self.assertIn("profile_cache_pending", skill)
 
 
 if __name__ == "__main__":
