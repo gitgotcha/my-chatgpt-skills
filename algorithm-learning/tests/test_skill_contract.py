@@ -53,6 +53,67 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         self.assertIn("Asia/Shanghai", template)
         self.assertIn("DTSTART:20260101T090000", template)
 
+    def test_new_conversation_requires_user_selection_before_answering(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        contract = (ROOT / "references" / "algorithm-profile-contract.md").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "新算法对话的第一条学习请求",
+            "A. 张三",
+            "新建档案",
+            "暂存",
+            "不讲题",
+        ):
+            self.assertIn(required, skill)
+        self.assertIn("user-index.json", contract)
+        self.assertIn("仅允许为列出用户", contract)
+
+    def test_answering_cycle_must_write_event_and_immediately_update_snapshot(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        contract = (ROOT / "references" / "algorithm-profile-contract.md").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "每次算法学习请求结束前",
+            "必须写入学习事件",
+            "立即更新画像快照",
+            "cloud_persistence_pending",
+            "不得宣称已同步",
+        ):
+            self.assertIn(required, skill)
+        self.assertIn("consulted", contract)
+        self.assertIn("eventKey", contract)
+
+    def test_bound_conversation_reuses_identity_until_explicit_switch(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for required in (
+            "同一对话",
+            "不重复询问身份",
+            "切换用户",
+            "重新验证身份",
+            "清空本对话身份绑定",
+        ):
+            self.assertIn(required, skill)
+
+    def test_daily_task_cannot_enumerate_other_users(self):
+        protocol = (ROOT / "references" / "algorithm-daily-protocol.md").read_text(
+            encoding="utf-8"
+        )
+        template = (ROOT / "references" / "daily-scheduler-prompt-template.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("不得读取 `user-index.json`", protocol)
+        self.assertIn("不得读取 `user-index.json`", template)
+
+    def test_identity_gate_plan_is_kept_with_mermaid_workflows(self):
+        plan = (ROOT / "references" / "2026-08-11-conversation-identity-gate-plan.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertGreaterEqual(plan.count("```mermaid"), 2)
+        self.assertIn("A. 张三", plan)
+        self.assertIn("每次算法学习请求", plan)
+
 
 if __name__ == "__main__":
     unittest.main()
