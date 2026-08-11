@@ -5,7 +5,7 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 # 算法学习
 
-先输出：`正在使用「算法学习」skill，为你分析这道题。`
+身份门禁优先于任何答疑输出：只有对话已绑定有效用户后，才输出 `正在使用「算法学习」skill，为你分析这道题。`
 
 默认使用中文。用户提供代码时，使用同一编程语言并尽量保留变量命名、函数结构和算法路线；不要未经同意改写成另一种语言。用户只给题目且未指定语言时，先说明“下面默认使用 Java 17 实现。”
 
@@ -16,7 +16,7 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 | 用户目标 | 做法 |
 | --- | --- |
 | 代码错了、越界、超时、代码评审 | 先诊断用户代码，再给最小修改版；如有价值，再给推荐实现。 |
-| 只要提示、不要答案、卡住了 | 按提示层级推进，停在用户要求的层级。 |
+| 只要提示、不要答案、卡住了 | 按渐进提示的层级推进，停在用户要求的层级。 |
 | 怎么做、完整代码、详细题解 | 给完整题解和可提交代码。 |
 | 有没有剪枝、能否优化 | 区分已有优化、可加优化和不适用的优化，并证明正确性。 |
 
@@ -88,17 +88,27 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 - 反例、替代方案和剪枝是否真实适用且解释了正确性？
 - 是否以可迁移的复习要点收尾？
 
-## 个人算法画像与每日练习
+## 个人算法画像与每日练习（强制闭环）
 
-此子系统不改变答疑内容和答案揭示程度。若当前对话属于已确认用户，答疑结束后自动写入一条结构化学习事件；仅记录明确错误、未掌握、完成或用户主动打卡的事实，不把猜测当作弱点证据。
+此子系统不改变答疑内容和答案揭示程度，但身份绑定与画像更新不可跳过。事件、快照和数据隔离读取 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)；Drive 读写读取 [references/google-drive-runtime.md](references/google-drive-runtime.md)。
 
-1. 首次使用画像功能时，先取得 `username`，系统生成 UUID 形式 `userId`，展示二者并要求确认。未确认前不得读取或写入该用户详情。
-2. 后续每次读写都同时校验 `userId` 与 `username`；不匹配立即停止，切换用户必须重新确认。
-3. 云端根目录由本次用户确认或独立定时任务提示提供。真实数据只能写入 `users/<userId>/`；不可跨用户读取。
-4. 事件、镜像、题单与打卡格式见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。Google Drive 读写、冲突和初始化约定见 [references/google-drive-runtime.md](references/google-drive-runtime.md)。
-5. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为学习事件；未完成题在下一日优先保留。
-6. 每日独立任务按 [references/algorithm-daily-protocol.md](references/algorithm-daily-protocol.md) 运行。它生成 3～5 题：完整包优先为 1 道薄弱复习、2 道当前专题、2 道综合/变式；有未完成题时先保留它们并压缩新题。
-7. 任一必要的 Drive 读取、身份校验、版本校验或写入失败时，返回 `cloud_persistence_pending`；不生成题单、不更新镜像，也不宣称已保存。
+### 新对话身份门禁
+
+1. 遇到新算法对话的第一条学习请求，先暂存用户的问题、代码或打卡内容；此时不讲题、不读取任何用户详情，也不输出通常的答疑开场。
+2. 只读取 `user-index.json`，稳定列出 active 用户，例如：`你是 A. 张三，还是 B. 李四？也可回复“新建档案”。` 索引为空时只提供“新建档案”。
+3. 用户选择字母或完整 username 后，读取该 `users/<userId>/identity.json`，严格核对 `userId`、`username`、状态和 schemaVersion；通过才将 `{userId, username}` 绑定到本对话，并自动继续处理已暂存的请求，无需用户重发。
+4. 用户选择新建档案时，只询问 `username`；规范化空白并在索引中检查全局唯一。唯一时生成 UUID，创建 identity、空事件日志和初始 `profile-v1`，读回校验后更新索引并绑定本对话。失败时不得绑定。
+5. 同一对话内不重复询问身份，后续学习请求仅使用首次校验成功的绑定。用户明确说“切换用户”“重新验证身份”或“我不是刚才那个人”时，立即清空本对话身份绑定；在下一条请求重新进入身份门禁前，不读写画像。
+
+### 每次答疑的落盘收尾
+
+每次算法学习请求结束前，必须写入学习事件，并立即更新画像快照。适用于讲题、代码纠错、渐进提示、完整解法和打卡；没有掌握度证据时，写中性的 `consulted`，不得凭猜测新增弱点。
+
+1. 从本次对话提取一个或多个有证据的 `incorrect`、`stuck`、`partial`、`correct`、`completed` 或 `consulted` 事件；同一 `eventKey` 幂等去重。
+2. 追加事件日志，读回并核验事件的用户锁；基于旧快照与未应用事件生成 `profile-v<N+1>`，读回核验后以预期 `profileVersion` 原子替换 current 快照。
+3. 只有事件和快照都成功落盘，才在答复末尾简短说明“已同步画像”。若任一读取、身份校验、版本校验或写入失败，返回 `cloud_persistence_pending` 或 `profile_conflict`，明确“本题已讲解，但未计入画像”，不得宣称已同步、不得生成或修改题单。
+
+每日独立任务按 [references/algorithm-daily-protocol.md](references/algorithm-daily-protocol.md) 运行。它固定绑定一名用户，生成自适应 3～5 题：完整包优先为 1 道薄弱复习、2 道当前专题、2 道综合/变式；有未完成题时先保留并压缩新题。
 
 ## 专项检查与回答前检查
 

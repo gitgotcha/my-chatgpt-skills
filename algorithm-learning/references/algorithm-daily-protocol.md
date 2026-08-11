@@ -1,6 +1,6 @@
 # 每日练习生成协议
 
-独立定时任务必须带固定的 `userId`、`username`、Drive 根目录和运行日期；不依赖聊天上下文。
+独立定时任务必须带固定的 `userId`、`username`、Drive 根目录和运行日期；不依赖聊天上下文，且不得读取 `user-index.json` 或枚举其他用户。
 
 1. 读取 `identity.json`，校验用户锁；再读取 current 快照、事件日志和最近题单。缺一项或任一身份不匹配即停止。
 2. 找出未应用事件，校验事件键去重，在内存生成候选 `profileVersion + 1` 镜像。
