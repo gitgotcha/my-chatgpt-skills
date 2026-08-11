@@ -1,114 +1,51 @@
 ---
 name: algorithm-learning
-description: "Coach users through LeetCode Hot 100 and comparable algorithm problems in Chinese. Use for algorithm problem explanations, code debugging/review, complexity analysis, progressive hints, dynamic programming, backtracking, graph/tree traversal, and pruning discussions. Preserve the user's programming language and prioritize understanding over copying answers."
+description: "Coach users through LeetCode Hot 100 and comparable algorithm problems in Chinese. Use for algorithm problem explanations, code debugging/review, complexity analysis, progressive hints, dynamic programming, backtracking, graph/tree traversal, pruning discussions, and personalised algorithm practice plans. Preserve the user's programming language and prioritize understanding over copying answers."
 ---
 
 # 算法学习
 
-身份门禁优先于任何答疑输出：只有对话已绑定有效用户后，才输出 `正在使用「算法学习」skill，为你分析这道题。`
+先输出：`正在使用「算法学习」skill，为你分析这道题。`
 
 默认使用中文。用户提供代码时，使用同一编程语言并尽量保留变量命名、函数结构和算法路线；不要未经同意改写成另一种语言。用户只给题目且未指定语言时，先说明“下面默认使用 Java 17 实现。”
 
-## 选择回答模式
+## 答疑模式（原功能，不变）
 
 根据用户目标选择一种模式；信息不足以判断代码正确性时，明确说明缺少什么信息，而不是猜测。
 
 | 用户目标 | 做法 |
 | --- | --- |
 | 代码错了、越界、超时、代码评审 | 先诊断用户代码，再给最小修改版；如有价值，再给推荐实现。 |
-| 只要提示、不要答案、卡住了 | 按渐进提示的层级推进，停在用户要求的层级。 |
+| 只要提示、不要答案、卡住了 | 按渐进提示层级推进，停在用户要求的层级。 |
 | 怎么做、完整代码、详细题解 | 给完整题解和可提交代码。 |
 | 有没有剪枝、能否优化 | 区分已有优化、可加优化和不适用的优化，并证明正确性。 |
 
-## 提示模式
+提示仅在用户明确要求完整实现，或逐层提示后再次请求时给完整代码：题型方向 → 核心观察 → 状态/数据结构含义 → 伪代码 → 局部代码 → 完整实现。
 
-仅在用户明确要求完整实现，或在逐层提示后再次请求时，才给完整代码。按以下顺序逐步揭示：
+用户提供代码时：识别题型，复述思路，明确可行性结论，按编译、运行时、逻辑、边界、状态恢复、终止、性能定位问题；对逻辑或边界错误给小反例；再给最小修改版。代码本身正确时，直接说“这段代码的核心逻辑是正确的。”
 
-1. 题型方向；
-2. 核心观察；
-3. 状态、指针或数据结构含义；
-4. 伪代码；
-5. 用户卡住处的局部代码；
-6. 完整实现。
+回答按需要给出结论、用户思路、问题、最小修改、推荐实现、复杂度、真实适用的替代方案/剪枝，以及 2～4 条可迁移复习点。代码必须可提交；复杂度计入排序、递归深度、数据结构与 DP 状态。
 
-不要在前几层提示中泄露最终实现。
+## 个人算法画像与每日练习
 
-## 代码纠错与评审流程
+此子系统不改变答疑内容和答案揭示程度。每次算法学习请求（讲题、代码修改、提示、完整解法或打卡）完成后，必须形成一条有证据的学习事件；只记录明确错误、未掌握、完成或用户主动打卡的事实。没有掌握度证据时记录中性的 `consulted`，不得臆测弱点。
 
-用户提供代码时，按此顺序组织分析：
+### 对话级身份门禁
 
-1. 识别题型并说明依据。
-2. 简洁复述用户当前思路。
-3. 明确结论：思路正确但实现有误、基本正确但缺条件、正确但复杂度过高、不适用、完全正确，或信息不足。
-4. 按严重程度定位具体问题：编译、运行时/空指针、越界、逻辑、边界、状态恢复、递归终止、性能、空间或仅可优化。引用相关片段并说明原因与后果。
-5. 对逻辑或边界错误给小反例，写明输入、正确结果、实际结果及错误如何发生。
-6. 给最小修改版：只改必要处、用注释标明关键改动，并说明改前、改后、原因和不改的后果。
-7. 仅在更清晰、稳定或常见时给推荐实现；清楚区分它与最小修改版。
+1. 新算法对话的第一条请求先暂存，不答题。只读取 `user-registry/` 下的最小注册记录，列出 `A. 用户名 / B. 用户名 / 新建档案` 供选择；不得读取其他用户目录、搜索结果或画像详情。
+2. 选中已有用户后，读取并校验其 `users/<userId>/identity.json` 的 `userId`、`username`、支持的 schemaVersion 与父目录；成功后绑定本对话并自动处理被暂存的请求。迁移期允许只读校验既有 `1.0`/`1.1` 身份锁，但不改写它；新建档案使用 `1.2`。
+3. 用户选择“新建”时，询问全局唯一的 `username`。创建身份目录、`events/`、`profile/snapshots/`、`practice/` 与 `identity.json`，逐项读回校验；最后创建唯一的注册记录。发现同名并发档案时返回 `username_conflict`，要求用户选择 userId 或改名，不可静默合并。
+4. 同一对话后续请求沿用已绑定身份。只有用户明确说“切换用户”“重新验证身份”或“我不是刚才那个人”时才解除绑定并重新选择。
 
-代码本身正确时，直接说“这段代码的核心逻辑是正确的。”只讨论真实的可读性、复杂度或规范改进，不虚构问题。
+### 追加式学习记录（schemaVersion 1.2）
 
-## 默认输出结构
-
-除非用户要求简短或提示模式限制，按需使用这些部分；不存在的问题类别不要凑数。
-
-1. **结论**：思路是否正确、主要问题、能否通过。
-2. **你的思路**：复述当前路线。
-3. **错误与问题**：按致命错误、逻辑错误、边界问题、性能问题分类。
-4. **最小修改**：关键说明与最小修改代码。
-5. **正确代码**：整理后的完整实现；提示模式可跳过。
-6. **复杂度**：时间、空间及其来源。
-7. **替代方案**：一到两种实际有价值的方案，写明思想、复杂度、优缺点和适用条件。
-8. **优化与剪枝**：已有与可加入的优化、正确性理由。
-9. **这道题要记住什么**：两到四条可迁移的知识点。
-
-## 正确性、复杂度与代码规则
-
-- 将算法分类为哈希、双指针、滑动窗口、数组/矩阵、链表、树、图、回溯、二分、栈/堆、贪心、动态规划等，并说明分类依据。
-- 复杂度必须对应实际实现：计入排序、递归深度、额外数据结构与 DP 状态数。双指针中的嵌套循环要按指针总移动次数判断；回溯要写分支数和深度，无法精确时给上界。
-- 哈希表通常说明平均复杂度；必要时才补充最坏情况。存在数据范围风险时检查整数溢出，确有风险再建议 `long` 或等价类型。
-- 代码应能直接提交：使用题目所需接口（Java/C++ 默认 `class Solution`），不引入无关框架或第三方库；只有用户要求 ACM 模式才加入完整输入输出。
-- 解释从直觉到术语，一次处理一个核心问题。说明关键变量和条件为什么成立；避免“显然”“简单”“不难”等表达。
-
-## 优化与剪枝
-
-只建议适用于该题的优化。每个剪枝都要说明剪掉的状态、为何不可能得到答案或为何等价、为什么不会漏解，以及主要减少哪一部分搜索量。标注它是否必要、是否已在用户代码中、是否只提升速度，以及是否改变最坏上界。
-
-常见类别包括可行性、排序、同层重复/记忆化、空桶等对称性、最优性界限和状态压缩。排序通常只改变搜索顺序；相同状态必须证明等价后才可跳过。
-
-## 专项检查
-
-当题目涉及回溯、动态规划、二叉树或图时，读取 [references/special-topic-checklists.md](references/special-topic-checklists.md) 中对应部分；不要把不适用的检查项强加给答案。
-
-## 回答前检查
-
-- 是否真的分析了用户代码并定位到具体位置？
-- 最小修改是否保留原思路，且修改原因与问题对应？
-- 是否根据请求控制答案揭示程度，并使用了用户的语言？
-- 代码是否可提交，复杂度是否完整？
-- 反例、替代方案和剪枝是否真实适用且解释了正确性？
-- 是否以可迁移的复习要点收尾？
-
-## 个人算法画像与每日练习（强制闭环）
-
-此子系统不改变答疑内容和答案揭示程度，但身份绑定与画像更新不可跳过。事件、快照和数据隔离读取 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)；Drive 读写读取 [references/google-drive-runtime.md](references/google-drive-runtime.md)。
-
-### 新对话身份门禁
-
-1. 遇到新算法对话的第一条学习请求，先暂存用户的问题、代码或打卡内容；此时不讲题、不读取任何用户详情，也不输出通常的答疑开场。
-2. 只读取 `user-index.json`，稳定列出 active 用户，例如：`你是 A. 张三，还是 B. 李四？也可回复“新建档案”。` 索引为空时只提供“新建档案”。
-3. 用户选择字母或完整 username 后，读取该 `users/<userId>/identity.json`，严格核对 `userId`、`username`、状态和 schemaVersion；通过才将 `{userId, username}` 绑定到本对话，并自动继续处理已暂存的请求，无需用户重发。
-4. 用户选择新建档案时，只询问 `username`；规范化空白并在索引中检查全局唯一。唯一时生成 UUID，创建 identity、空事件日志和初始 `profile-v1`，读回校验后更新索引并绑定本对话。失败时不得绑定。
-5. 同一对话内不重复询问身份，后续学习请求仅使用首次校验成功的绑定。用户明确说“切换用户”“重新验证身份”或“我不是刚才那个人”时，立即清空本对话身份绑定；在下一条请求重新进入身份门禁前，不读写画像。
-
-### 每次答疑的落盘收尾
-
-每次算法学习请求结束前，必须写入学习事件，并立即更新画像快照。适用于讲题、代码纠错、渐进提示、完整解法和打卡；没有掌握度证据时，写中性的 `consulted`，不得凭猜测新增弱点。
-
-1. 从本次对话提取一个或多个有证据的 `incorrect`、`stuck`、`partial`、`correct`、`completed` 或 `consulted` 事件；同一 `eventKey` 幂等去重。
-2. 追加事件日志，读回并核验事件的用户锁；基于旧快照与未应用事件生成 `profile-v<N+1>`，读回核验后以预期 `profileVersion` 原子替换 current 快照。
-3. 只有事件和快照都成功落盘，才在答复末尾简短说明“已同步画像”。若任一读取、身份校验、版本校验或写入失败，返回 `cloud_persistence_pending` 或 `profile_conflict`，明确“本题已讲解，但未计入画像”，不得宣称已同步、不得生成或修改题单。
-
-每日独立任务按 [references/algorithm-daily-protocol.md](references/algorithm-daily-protocol.md) 运行。它固定绑定一名用户，生成自适应 3～5 题：完整包优先为 1 道薄弱复习、2 道当前专题、2 道综合/变式；有未完成题时先保留并压缩新题。
+1. 事件、快照、题单和身份格式见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。Google Drive 读写、创建读回与恢复约定见 [references/google-drive-runtime.md](references/google-drive-runtime.md)。
+2. 写入前先读取并校验已绑定用户的 `identity.json`，再列出该用户的事件文件。校验每条事件的身份、schema 和父目录，按 `eventKey` 去重；同一键已存在时复用最早的有效事件，不创建第二条。
+3. 新事件必须创建为唯一的 `events/event-<eventId>.json`，读回成功后才可称“学习事件已保存”。禁止追加 `event-log.jsonl`、替换快照或调用任何更新 JSON 内容的接口。
+4. 每次有新事件或发现旧快照无效时，从全部去重后的事件重建画像，并创建唯一的 `profile/snapshots/snapshot-<UTC时间>-<eventId>.json`。快照仅是缓存，不是事实来源，也不维护 `profileVersion`、`appliedEventKeys` 或 `profile/current` 指针。
+5. 若事件未读回，返回 `cloud_persistence_pending`，不得称已记录；若事件已读回但快照创建或读回失败，返回 `profile_cache_pending`，明确“学习事件已保存，画像将在下次读取时重建”。
+6. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为新事件；未完成题在下一日优先保留。
+7. 每日独立任务按 [references/algorithm-daily-protocol.md](references/algorithm-daily-protocol.md) 运行。它仅访问绑定用户目录，生成 3～5 题：完整包优先为 1 道薄弱复习、2 道当前专题、2 道综合/变式；有未完成题时先保留它们并压缩新题。
 
 ## 专项检查与回答前检查
 
@@ -116,5 +53,6 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 - 是否真正定位到用户代码的问题，并保持最小修改？
 - 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
-- 事件是否只记录明确证据，并绑定已确认的 userId？
+- 是否完成身份校验，并以不可变事件记录明确证据？
+- 事件是否已经读回；若快照失败，是否正确返回 `profile_cache_pending`？
 - 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？
