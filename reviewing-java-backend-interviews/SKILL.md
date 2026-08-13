@@ -10,6 +10,7 @@ description: Use when reviewing a candidate-locked mock or real interview throug
 ## MCP 工具与边界
 
 - `list_candidates(query?, limit?)`：确认前只允许读取摘要。
+- `create_candidate(displayName, distinguishingNote?, resume?)`：创建候选人并只返回摘要，创建后仍需确认 ID。
 - `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认后读取候选人上下文与已提交产物索引。
 - `read_artifact(candidateId, artifactKey)`：只读取已同步的 JSON/Markdown 产物；DOCX 不读取全文。
 - `submit_artifact(...)`：提交 JSON、Markdown、DOCX，不经任何直连云端渠道。
@@ -19,7 +20,7 @@ description: Use when reviewing a candidate-locked mock or real interview throug
 
 ## 强制启动顺序
 
-1. `list_candidates` 搜索候选人摘要；用户确认 `candidateId` 前禁止读取详细上下文。
+1. `list_candidates` 搜索候选人摘要；找不到时可调用 `create_candidate`，展示结果并要求用户确认返回的 `candidateId`。用户确认前禁止读取详细上下文。
 2. 锁定 `ConfirmedCandidateContext` 并调用 `get_candidate_context`。候选人 ID 不一致、身份不明或用户取消时立即停止。
 3. 找到 `MOCK-*` 的 `session.json` 与 `raw_transcript.md`；分别用 `read_artifact` 读取。真实面试由用户提供原始记录后，先作为同一会话的不可变 `session.json` 与 `raw_transcript.md` 提交。
 4. 依据真实题目内容确定领域；混合且置信不足时让用户选择。

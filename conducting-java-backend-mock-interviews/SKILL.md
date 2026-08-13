@@ -12,6 +12,7 @@ description: Use when conducting a candidate-locked mock technical interview and
 启动前确认本机 MCP 已配置 `RELIABLE_DRIVE_SYNC_INGRESS_URL` 与 `RELIABLE_DRIVE_SYNC_INGRESS_SHARED_SECRET`。可用工具：
 
 - `list_candidates(query?, limit?)`：只返回候选人摘要。
+- `create_candidate(displayName, distinguishingNote?, resume?)`：创建候选人并只返回摘要。
 - `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认候选人后才可调用。
 - `submit_artifact(...)`：提交不可变 JSON、Markdown 或 DOCX；先写本机 SQLite Outbox，再异步交给云端。
 
@@ -19,7 +20,7 @@ description: Use when conducting a candidate-locked mock technical interview and
 
 ## 强制启动顺序
 
-1. 先用 `list_candidates` 搜索或展示摘要。未确认前，不读取候选人上下文、简历、画像或历史会话。
+1. 先用 `list_candidates` 搜索或展示摘要。若不存在目标候选人，调用 `create_candidate`；展示返回的候选人 ID、姓名/备注后，仍须明确二次确认。未确认前，不读取候选人上下文、简历、画像或历史会话。
 2. 展示候选人 ID、姓名/备注，要求用户明确二次确认。姓名不是主键；同名时必须选择 `candidateId`。
 3. 锁定 `ConfirmedCandidateContext`：`candidateId`、`displayName`、`confirmedByUser: true`、`confirmedAt`、`activeResumeArtifactKey`、`selectedDomain`。本轮任何 MCP 读取或提交都使用此 ID。
 4. 仅在锁定后调用 `get_candidate_context`；询问当前简历、是否更换/上传或不使用。简历声明只用于出题，绝不直接变成能力证据。
