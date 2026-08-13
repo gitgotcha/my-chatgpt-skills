@@ -16,12 +16,12 @@ description: Use when reviewing a candidate-locked mock or real interview throug
 - `submit_artifact(...)`：提交 JSON、Markdown、DOCX，不经任何直连云端渠道。
 - `submit_event(...)`：提交确定性、可重放的学习/画像事件；不可携带二进制材料。
 
-工具不可用或尚未同步时如实报告 `review_pending`，绝不使用旧的 Drive 直写兜底。
+工具不可用或 Drive 写入错误时如实报告“尚未持久化”，立即停止本次后续持久化动作；绝不使用旧的 Drive 直写兜底。
 
 ## 强制启动顺序
 
 1. `list_candidates` 搜索候选人摘要；找不到时可调用 `create_candidate`，展示结果并要求用户确认返回的 `candidateId`。用户确认前禁止读取详细上下文。
-2. 锁定 `ConfirmedCandidateContext` 并调用 `get_candidate_context`。候选人 ID 不一致、身份不明或用户取消时立即停止。
+2. 锁定包含 `candidateFolderId` 的 `ConfirmedCandidateContext` 并调用 `get_candidate_context`。候选人 ID 不一致、身份不明或用户取消时立即停止。
 3. 找到 `MOCK-*` 的 `session.json` 与 `raw_transcript.md`；分别用 `read_artifact` 读取。真实面试由用户提供原始记录后，先作为同一会话的不可变 `session.json` 与 `raw_transcript.md` 提交。
 4. 依据真实题目内容确定领域；混合且置信不足时让用户选择。
 
@@ -43,4 +43,4 @@ Python/本地确定性逻辑只负责 Schema 校验、事件应用和快照重�
 
 模拟复盘的已校验事件可通过 `submit_event` 自动提交。真实复盘默认只提交报告和变化预览，状态 `pending`；只有用户明确确认才提交 `profile_update` 事件。拒绝时保留报告、将变更标记 `rejected`，当前画像不变。修正已应用 Review 时创建 V2/CorrectionEvent，并从 V1 前快照重放，不丢失后续历史。
 
-提交成功（202）只表示异步链路已受理，向用户说明“画像/报告正在后台同步”；MCP 后续通知若报告失败，须在下一次请求时提醒并保持可重试。
+每次提交只有在 Drive 返回文件 ID 后才可称为已保存；任一错误时停止本次后续写入并保留可重试的内容在对话中。

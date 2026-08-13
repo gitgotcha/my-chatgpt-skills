@@ -14,15 +14,15 @@ description: Use when conducting a candidate-locked mock technical interview and
 - `list_candidates(query?, limit?)`：只返回候选人摘要。
 - `create_candidate(displayName, distinguishingNote?, resume?)`：创建候选人并只返回摘要。
 - `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认候选人后才可调用。
-- `submit_artifact(...)`：提交不可变 JSON、Markdown 或 DOCX；先写本机 SQLite Outbox，再异步交给云端。
+- `submit_artifact(...)`：把 JSON、Markdown 或 DOCX 直接写入已确认候选人的 Drive 文件夹。
 
-若 MCP 未配置、工具不可用或返回未接受状态，保留本轮内容在对话中并明确说明“尚未持久化”；不要退回到 Drive 连接器或伪称已保存。
+若 MCP 未配置、工具不可用或 Drive 写入返回错误，保留本轮内容在对话中并明确说明“尚未持久化”；立即停止后续持久化逻辑，不要退回到 Drive 连接器或伪称已保存。
 
 ## 强制启动顺序
 
 1. 先用 `list_candidates` 搜索或展示摘要。若不存在目标候选人，调用 `create_candidate`；展示返回的候选人 ID、姓名/备注后，仍须明确二次确认。未确认前，不读取候选人上下文、简历、画像或历史会话。
 2. 展示候选人 ID、姓名/备注，要求用户明确二次确认。姓名不是主键；同名时必须选择 `candidateId`。
-3. 锁定 `ConfirmedCandidateContext`：`candidateId`、`displayName`、`confirmedByUser: true`、`confirmedAt`、`activeResumeArtifactKey`、`selectedDomain`。本轮任何 MCP 读取或提交都使用此 ID。
+3. 锁定 `ConfirmedCandidateContext`：`candidateId`、`candidateFolderId`、`displayName`、`confirmedByUser: true`、`confirmedAt`、`activeResumeArtifactKey`、`selectedDomain`。本轮任何 MCP 读取或提交都使用此 ID 与文件夹 ID。
 4. 仅在锁定后调用 `get_candidate_context`；询问当前简历、是否更换/上传或不使用。简历声明只用于出题，绝不直接变成能力证据。
 5. 领域优先级为本轮明确方向、简历、候选人上下文、Java 后端默认；混合材料且无法可靠判断时让用户选择。
 
@@ -59,4 +59,4 @@ description: Use when conducting a candidate-locked mock technical interview and
 }
 ```
 
-`submit_artifact` 返回 `202` 即表示已可靠进入本机 Outbox/云端任务链路，不等同于 Drive 已完成；向用户说明“已提交后台同步”。相同 `artifactKey + sha256` 可安全重试；同 key 不同 SHA-256 是冲突，停止并调查。随后将 `sessionId`、两项 `artifactKey` 和 `review_pending` 交给 `reviewing-java-backend-interviews`。
+`submit_artifact` 只有在 Drive 返回文件 ID 后才算成功；任一提交错误时立即停止，不得继续生成或提交后续持久化产物。成功后将 `sessionId`、两项 `artifactKey` 和 `review_pending` 交给 `reviewing-java-backend-interviews`。
