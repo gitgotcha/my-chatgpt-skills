@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findOrCreateCandidateFolder, formatGoogleDriveWriteError, listCandidates, uploadDriveFile } from "../src/google-drive.js";
+import { findOrCreateCandidateFolder, formatGoogleDriveWriteError, listCandidates, uploadDriveFile, withSharedDriveSupport } from "../src/google-drive.js";
 
 const env = { GOOGLE_DRIVE_FOLDER_ID: "root" };
 
@@ -9,6 +9,13 @@ test("formatGoogleDriveWriteError preserves Drive status and message", () => {
     formatGoogleDriveWriteError(403, { error: { message: "The caller does not have permission" } }),
     "Google Drive write failed (403): The caller does not have permission"
   );
+});
+
+test("withSharedDriveSupport enables shared-drive requests", () => {
+  const url = new URL(withSharedDriveSupport("https://www.googleapis.com/drive/v3/files?q=example", { list: true }));
+  assert.equal(url.searchParams.get("supportsAllDrives"), "true");
+  assert.equal(url.searchParams.get("includeItemsFromAllDrives"), "true");
+  assert.equal(url.searchParams.get("corpora"), "allDrives");
 });
 
 test("findOrCreateCandidateFolder reuses the earliest exact-name folder", async () => {

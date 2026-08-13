@@ -7,6 +7,16 @@ export const formatGoogleDriveWriteError = (status, payload) => {
     : `Google Drive write failed (${status})`;
 };
 
+export const withSharedDriveSupport = (rawUrl, { list = false } = {}) => {
+  const url = new URL(rawUrl);
+  url.searchParams.set("supportsAllDrives", "true");
+  if (list) {
+    url.searchParams.set("includeItemsFromAllDrives", "true");
+    url.searchParams.set("corpora", "allDrives");
+  }
+  return url.toString();
+};
+
 const base64url = (value) => {
   const bytes = typeof value === "string" ? encoder.encode(value) : new Uint8Array(value);
   let binary = "";
@@ -44,7 +54,7 @@ async function googleUpload(env, parentId, name, content, mimeType, fetchImpl = 
   const boundary = "drive-mcp-boundary";
   const metadata = JSON.stringify({ name, parents: [parentId], mimeType });
   const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n${content}\r\n--${boundary}--`;
-  const response = await fetchImpl("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType", {
+  const response = await fetchImpl(withSharedDriveSupport("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType"), {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` },
     body
@@ -55,16 +65,16 @@ async function googleUpload(env, parentId, name, content, mimeType, fetchImpl = 
   return payload;
 }
 
-async function googleGet(env, url, fetchImpl = fetch) {
+async function googleGet(env, url, fetchImpl = fetch, options = {}) {
   const token = await accessToken(env, fetchImpl);
-  const response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+  const response = await fetchImpl(withSharedDriveSupport(url, options), { headers: { authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error("Google Drive read failed");
   return response;
 }
 
 async function listFoldersFromDrive(env, deps = {}) {
   const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch);
+  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch, { list: true });
   const payload = await response.json();
   return payload.files ?? [];
 }
@@ -73,7 +83,7 @@ const escapeDriveQuery = (value) => value.replaceAll("\\", "\\\\").replaceAll("'
 
 async function findFoldersByNameFromDrive(env, displayName, deps = {}) {
   const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and name = '${escapeDriveQuery(displayName)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch);
+  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch, { list: true });
   const payload = await response.json();
   return payload.files ?? [];
 }
@@ -119,7 +129,7 @@ export async function getCandidateContext(env, input, deps = {}) {
 export async function readArtifact(env, input, deps = {}) {
   const candidate = await findOrCreateCandidateFolder(env, input, deps);
   const query = encodeURIComponent(`'${candidate.folderId}' in parents and name = '${escapeDriveQuery(input.artifactKey)}' and trashed = false`);
-  const list = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)`, deps.fetch ?? fetch);
+  const list = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)`, deps.fetch ?? fetch, { list: true });
   const payload = await list.json();
   const file = payload.files?.[0];
   if (!file?.id) throw new Error("Artifact not found in Google Drive");

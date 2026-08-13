@@ -1,8 +1,8 @@
 # reliable-drive-sync cloud MCP
 
-This Worker exposes a simple name-folder MCP contract to a cloud Codex task. It writes directly to one service-account-shared Google Drive folder. A `displayName` maps to a same-name folder under that root: an existing folder is reused, and a missing one is created. It reports success only after Google Drive returns a file or folder ID; any Drive error is returned to the caller and stops the persistence workflow. Do not put secrets in Git.
+This Worker exposes a simple name-folder MCP contract to a cloud Codex task. It writes directly to one service-account-shared folder in a Google shared drive. A `displayName` maps to a same-name folder under that root: an existing folder is reused, and a missing one is created. It reports success only after Google Drive returns a file or folder ID; any Drive error is returned to the caller and stops the persistence workflow. Do not put secrets in Git.
 
-1. Create a Drive folder and share it with the Google service-account email as an editor.
+1. Create a folder in a Google shared drive and add the Google service-account email as a Writer member. Service accounts cannot create files in a normal My Drive folder.
 2. Run `wrangler secret put MCP_BEARER_TOKEN`, `wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON`, and `wrangler secret put GOOGLE_DRIVE_FOLDER_ID`.
 3. Run `wrangler deploy`.
 4. Configure the published HTTPS endpoint as the `reliable-drive-sync` remote MCP in the eligible Codex workspace.
