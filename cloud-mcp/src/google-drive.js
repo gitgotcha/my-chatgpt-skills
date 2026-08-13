@@ -1,5 +1,12 @@
 const encoder = new TextEncoder();
 
+export const formatGoogleDriveWriteError = (status, payload) => {
+  const message = payload?.error?.message;
+  return typeof message === "string" && message.trim()
+    ? `Google Drive write failed (${status}): ${message.trim()}`
+    : `Google Drive write failed (${status})`;
+};
+
 const base64url = (value) => {
   const bytes = typeof value === "string" ? encoder.encode(value) : new Uint8Array(value);
   let binary = "";
@@ -43,7 +50,8 @@ async function googleUpload(env, parentId, name, content, mimeType, fetchImpl = 
     body
   });
   const payload = await response.json();
-  if (!response.ok || !payload.id) throw new Error("Google Drive write failed: missing file id");
+  if (!response.ok) throw new Error(formatGoogleDriveWriteError(response.status, payload));
+  if (!payload.id) throw new Error("Google Drive write failed: missing file id");
   return payload;
 }
 

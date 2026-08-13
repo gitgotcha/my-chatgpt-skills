@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findOrCreateCandidateFolder, listCandidates, uploadDriveFile } from "../src/google-drive.js";
+import { findOrCreateCandidateFolder, formatGoogleDriveWriteError, listCandidates, uploadDriveFile } from "../src/google-drive.js";
 
 const env = { GOOGLE_DRIVE_FOLDER_ID: "root" };
+
+test("formatGoogleDriveWriteError preserves Drive status and message", () => {
+  assert.equal(
+    formatGoogleDriveWriteError(403, { error: { message: "The caller does not have permission" } }),
+    "Google Drive write failed (403): The caller does not have permission"
+  );
+});
 
 test("findOrCreateCandidateFolder reuses the earliest exact-name folder", async () => {
   const result = await findOrCreateCandidateFolder(env, { displayName: "小明" }, {
