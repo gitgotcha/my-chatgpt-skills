@@ -56,19 +56,18 @@ async function googleGet(env, url, fetchImpl = fetch) {
 
 async function listFoldersFromDrive(env, deps = {}) {
   const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, deps.fetch ?? fetch);
+  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch);
   const payload = await response.json();
   return payload.files ?? [];
 }
 
-async function readCandidateFromDrive(env, folderId, deps = {}) {
-  const query = encodeURIComponent(`'${folderId}' in parents and name = 'candidate.json' and trashed = false`);
-  const list = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)`, deps.fetch ?? fetch);
-  const payload = await list.json();
-  const fileId = payload.files?.[0]?.id;
-  if (!fileId) throw new Error("Candidate metadata is missing in Google Drive");
-  const file = await googleGet(env, `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, deps.fetch ?? fetch);
-  return file.json();
+const escapeDriveQuery = (value) => value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+
+async function findFoldersByNameFromDrive(env, displayName, deps = {}) {
+  const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and name = '${escapeDriveQuery(displayName)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch);
+  const payload = await response.json();
+  return payload.files ?? [];
 }
 
 export async function uploadDriveFile(env, parentId, name, content, mimeType, deps = {}) {
@@ -78,44 +77,40 @@ export async function uploadDriveFile(env, parentId, name, content, mimeType, de
   return file;
 }
 
-export async function createCandidateFolder(env, input, deps = {}) {
+export async function findOrCreateCandidateFolder(env, input, deps = {}) {
   const displayName = input?.displayName?.trim();
   if (!displayName) throw new Error("displayName is required");
-  const candidateId = `CAND-${(deps.uuid ?? crypto.randomUUID)()}`;
+  const findFoldersByName = deps.findFoldersByName ?? ((name) => findFoldersByNameFromDrive(env, name, deps));
+  const matches = await findFoldersByName(displayName);
+  const existing = [...matches].sort((left, right) => String(left.createdTime ?? "").localeCompare(String(right.createdTime ?? "")))[0];
+  if (existing?.id) return { displayName, folderId: existing.id, created: false };
   const createdAt = (deps.now ?? (() => new Date().toISOString()))();
-  const distinguishingNote = input.distinguishingNote?.trim() ?? "";
   const createFolder = deps.createFolder ?? ((parentId, name) => googleUpload(env, parentId, name, "", "application/vnd.google-apps.folder", deps.fetch ?? fetch));
-  const folder = await createFolder(env.GOOGLE_DRIVE_FOLDER_ID, candidateId);
+  const folder = await createFolder(env.GOOGLE_DRIVE_FOLDER_ID, displayName);
   if (!folder?.id) throw new Error("Google Drive write failed: missing folder id");
-  const candidate = { schemaVersion: "1.0", candidateId, displayName, distinguishingNote, createdAt, folderId: folder.id };
-  await uploadDriveFile(env, folder.id, "candidate.json", JSON.stringify(candidate), "application/json", deps);
-  return candidate;
+  await uploadDriveFile(env, folder.id, "identity.json", JSON.stringify({ schemaVersion: "1.0", displayName, createdAt }), "application/json", deps);
+  return { displayName, folderId: folder.id, created: true };
 }
 
 export async function listCandidates(env, input = {}, deps = {}) {
   const listFolders = deps.listFolders ?? (() => listFoldersFromDrive(env, deps));
-  const readCandidate = deps.readCandidate ?? ((folderId) => readCandidateFromDrive(env, folderId, deps));
   const query = input.query?.trim().toLowerCase() ?? "";
   const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 100);
   const folders = await listFolders();
-  const candidates = [];
-  for (const folder of folders) {
-    const candidate = await readCandidate(folder.id);
-    if (!query || candidate.displayName.toLowerCase().includes(query) || candidate.candidateId.toLowerCase().includes(query)) candidates.push({ ...candidate, folderId: folder.id });
-    if (candidates.length === limit) break;
-  }
-  return candidates;
+  return folders
+    .filter((folder) => !query || folder.name.toLowerCase().includes(query))
+    .slice(0, limit)
+    .map((folder) => ({ displayName: folder.name, folderId: folder.id }));
 }
 
 export async function getCandidateContext(env, input, deps = {}) {
-  const candidates = await listCandidates(env, { query: input.candidateId, limit: 100 }, deps);
-  const candidate = candidates.find((item) => item.candidateId === input.candidateId);
-  if (!candidate) throw new Error("Candidate not found in Google Drive");
+  const candidate = await findOrCreateCandidateFolder(env, input, deps);
   return { ...candidate, selectedDomain: input.selectedDomain ?? null, activeResumeId: input.resumeId ?? null, artifacts: [] };
 }
 
 export async function readArtifact(env, input, deps = {}) {
-  const query = encodeURIComponent(`'${input.candidateFolderId}' in parents and name = '${input.artifactKey.replaceAll("'", "\\'")}' and trashed = false`);
+  const candidate = await findOrCreateCandidateFolder(env, input, deps);
+  const query = encodeURIComponent(`'${candidate.folderId}' in parents and name = '${escapeDriveQuery(input.artifactKey)}' and trashed = false`);
   const list = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)`, deps.fetch ?? fetch);
   const payload = await list.json();
   const file = payload.files?.[0];

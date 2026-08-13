@@ -7,4 +7,4 @@ Read exactly one workflow before responding:
 - Java 后端模拟面试：`conducting-java-backend-mock-interviews/SKILL.md`
 - 面试记录复盘、报告或画像更新：`reviewing-java-backend-interviews/SKILL.md`
 
-For interview workflows, use only the configured `reliable-drive-sync` MCP for candidate and artifact data. For a new candidate, call `create_candidate`, show the returned candidate ID, summary, and `folderId`, then obtain explicit user confirmation before `get_candidate_context` or any submission. Treat any MCP write error as terminal: keep work in the conversation, state that it was not persisted, and do not continue to the next persistent action.
+For interview workflows, use only the configured `reliable-drive-sync` MCP for candidate and artifact data. Call `find_or_create_candidate(displayName)` to directly reuse or create the exact-name Drive folder; the same name always identifies the same person. All reads and writes use `displayName`, not a candidate ID or a separate confirmation flow. Treat any MCP write error as terminal: keep work in the conversation, state that it was not persisted, and do not continue to the next persistent action.
