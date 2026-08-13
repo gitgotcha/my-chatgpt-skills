@@ -1,29 +1,45 @@
 ---
 name: reviewing-java-backend-interviews
-description: Use when reviewing a candidate-locked mock or real interview with a unified evidence protocol, report, and deterministic profile update.
+description: Use when reviewing a candidate-locked mock or real interview through the reliable-drive-sync MCP, with immutable evidence and deterministic profile update events.
 ---
 
-# 统一面试复盘与能力画像
+# 统一面试复盘、画像事件与 MCP
 
-本 Skill 是模拟与真实面试共用的复盘、报告和确定性画像更新实现方。两类面试的评价标准与 JSON 协议相同，仅证据来源、置信度和应用确认策略不同。
+本 Skill 是模拟与真实面试的统一复盘方。**不得直接操作 Google Drive、D1、R2、Google API 或云端 HTTP。**候选人读取、会话证据读取和所有产物写入都必须经过 `reliable-drive-sync` MCP；MCP 负责本机 Outbox、云端任务、R2 暂存与最终 Drive 同步。
+
+## MCP 工具与边界
+
+- `list_candidates(query?, limit?)`：确认前只允许读取摘要。
+- `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认后读取候选人上下文与已提交产物索引。
+- `read_artifact(candidateId, artifactKey)`：只读取已同步的 JSON/Markdown 产物；DOCX 不读取全文。
+- `submit_artifact(...)`：提交 JSON、Markdown、DOCX，不经任何直连云端渠道。
+- `submit_event(...)`：提交确定性、可重放的学习/画像事件；不可携带二进制材料。
+
+工具不可用或尚未同步时如实报告 `review_pending`，绝不使用旧的 Drive 直写兜底。
 
 ## 强制启动顺序
 
-1. 只读取 CandidateIndex 摘要，按 ID 或姓名搜索并展示 ID、姓名、区分备注；未确认前禁止读取详细画像、简历和会话。
-2. 要求用户明确二次确认，创建并锁定 `ConfirmedCandidateContext`。所有读取、报告和更新都校验其 `candidate_id`；任何不一致立即终止，切换候选人必须结束当前会话后重新确认。
-3. 读取已锁定的 `MOCK-*` 交接会话或用户提供的 `REAL-*` 记录。先固化原始问答和转写；不保存原始音频。
-4. 识别实际领域：真实问题内容优先于 JD、简历和 Java 默认。逐题标记领域；混合材料置信不足时要求用户选择。
+1. `list_candidates` 搜索候选人摘要；用户确认 `candidateId` 前禁止读取详细上下文。
+2. 锁定 `ConfirmedCandidateContext` 并调用 `get_candidate_context`。候选人 ID 不一致、身份不明或用户取消时立即停止。
+3. 找到 `MOCK-*` 的 `session.json` 与 `raw_transcript.md`；分别用 `read_artifact` 读取。真实面试由用户提供原始记录后，先作为同一会话的不可变 `session.json` 与 `raw_transcript.md` 提交。
+4. 依据真实题目内容确定领域；混合且置信不足时让用户选择。
 
-## 统一复盘
+## 统一复盘要求
 
-每题保存原问题、候选人原回答、追问与关联、正确性/完整性、缺失与错误、失分归因、更好的口语回答、完整参考答案、表达分析和变式复测。Review 必须含 `source_type`、`evidence_type` 与 `evidence_confidence`。候选人回忆的可信度不能等同完整转写，事后补充不计现场表现。
+逐题保存原问题、候选人原回答、追问关联、正确性/完整性、缺失与错误、失分归因、更好的口语回答、完整参考答案、表达分析和变式复测。Review 中必须有 `sourceType`、`evidenceType`、`evidenceConfidence`；候选人回忆不等同完整转写。
 
-生成 `raw_transcript.md`、`review_vN.json`、`profile_update_event_vN.json`（若适用）和 `review_report_vN.docx`。报告必须包含候选人姓名/ID、类型、领域、时间、session ID、版本、逐题分析、画像变化和下一轮建议。生成后实际渲染并检查页面。
+生成以下不可变产物，使用相同的 `candidateId/sessionId`，`artifactKey` 格式为 `<candidateId>:interview:<sessionId>:<artifactType>:v<reviewVersion>`：
 
-## 确定性画像与确认
+1. `review.json`，`artifactType: "review"`，包含逐题分析与版本。
+2. `profile_update_event.json`，`artifactType: "profile_update"`，仅包含确定性画像变化、`expectedProfileVersion`、`eventKey`、证据引用与状态。
+3. `review_report.docx`，`artifactType: "report"`，必须在提交前渲染检查；报告含候选人姓名/ID、类型、领域、时间、session ID、版本、逐题分析、画像变化和下一轮建议。
 
-Python 只做 Schema 校验、确定性事件应用和快照重放；不重新调用模型。事件键为 `candidate_id + session_id + review_version`，以预期 `profile_version` 乐观锁提交。技术弱点按领域隔离，通用能力可跨领域累计；同一弱点只在两场不同会话、不同问法的正确证据后关闭。
+每个产物都使用 `submit_artifact`，以原始字节 Base64 和 SHA-256 构成不可变提交。`profile_update` 的 `dependsOn` 必须列出本次 `session`、`raw_transcript` 与 `review` 的 artifact keys；`report` 至少依赖 `review`。
 
-模拟复盘的已校验事件自动应用。真实复盘默认先生成报告与变化预览，状态为 `pending`，仅在用户明确确认后应用；拒绝时报告保留、事件标记 `rejected`、当前画像不变。修正已应用的 Review 时创建 V2 与 CorrectionEvent，从 V1 前快照排除旧事件、应用 V2 并重放随后有效事件，禁止丢失后续历史。
+## 确定性画像事件
 
-本轮正式云端后端为用户授权的 Google Drive；运行细则见 `references/google-drive-runtime.md`。连接器不可用时使用 `cloud_persistence_pending` 或 `review_pending` 如实说明，绝不把本地替身称为云端持久化。真实数据只在云端文件空间保存；测试只使用临时目录和 `TEST-*` 虚构候选人。
+Python/本地确定性逻辑只负责 Schema 校验、事件应用和快照重放，不重新调用模型。事件键固定为 `candidateId + sessionId + reviewVersion`；技术弱点按领域隔离，通用能力可跨领域累计；同一弱点仅在两个不同会话、不同问法的正确证据后关闭。
+
+模拟复盘的已校验事件可通过 `submit_event` 自动提交。真实复盘默认只提交报告和变化预览，状态 `pending`；只有用户明确确认才提交 `profile_update` 事件。拒绝时保留报告、将变更标记 `rejected`，当前画像不变。修正已应用 Review 时创建 V2/CorrectionEvent，并从 V1 前快照重放，不丢失后续历史。
+
+提交成功（202）只表示异步链路已受理，向用户说明“画像/报告正在后台同步”；MCP 后续通知若报告失败，须在下一次请求时提醒并保持可重试。

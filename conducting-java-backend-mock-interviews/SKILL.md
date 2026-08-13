@@ -1,30 +1,61 @@
 ---
 name: conducting-java-backend-mock-interviews
-description: Use when conducting a candidate-locked mock technical interview, preserving source evidence and safely handing it to the unified review workflow.
+description: Use when conducting a candidate-locked mock technical interview and submitting immutable source evidence through the reliable-drive-sync MCP.
 ---
 
-# 模拟面试执行与复盘交接
+# 模拟面试执行与 MCP 交接
 
-本 Skill 只负责候选人确认、简历选择、逐题模拟、原始证据固化和安全交接；不自行评分、生成最终复盘或更新共享画像。统一复盘和画像更新仅由 `reviewing-java-backend-interviews` 执行。
+本 Skill 只负责候选人确认、逐题模拟、原始证据整理与 MCP 交接；不自行做最终评分、复盘或画像更新。**不得直接读写 Google Drive、D1、R2 或云端 HTTP 接口。**所有持久化只能调用 `reliable-drive-sync` MCP。
+
+## MCP 契约
+
+启动前确认本机 MCP 已配置 `RELIABLE_DRIVE_SYNC_INGRESS_URL` 与 `RELIABLE_DRIVE_SYNC_INGRESS_SHARED_SECRET`。可用工具：
+
+- `list_candidates(query?, limit?)`：只返回候选人摘要。
+- `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认候选人后才可调用。
+- `submit_artifact(...)`：提交不可变 JSON、Markdown 或 DOCX；先写本机 SQLite Outbox，再异步交给云端。
+
+若 MCP 未配置、工具不可用或返回未接受状态，保留本轮内容在对话中并明确说明“尚未持久化”；不要退回到 Drive 连接器或伪称已保存。
 
 ## 强制启动顺序
 
-1. 只读取 CandidateIndex 的候选人摘要；默认展示最近候选人，支持按姓名或 `candidate_id` 搜索。未确认前禁止读取简历全文、详细画像、会话或候选人文件。
-2. 展示候选人 ID、姓名、区分备注，要求用户明确二次确认。姓名不是主键；同名候选人必须选择 ID。
-3. 创建并锁定 `ConfirmedCandidateContext`：`candidate_id`、`display_name`、`confirmed_by_user: true`、`confirmed_at`、`active_resume_id`、`selected_domain`。本轮所有读写必须携带该 ID；不匹配、取消或身份不明确时立即停止。
-4. 显示当前简历版本，询问使用当前版本、更换、上传或不使用。将选定 `resume_id` 锁定到会话。简历声明只影响出题，绝不直接写成能力证据。
-5. 领域优先级为本轮明确方向、简历、该候选人的领域画像、Java 后端默认。简历明显混合且无法可靠选择主领域时，要求用户选择；不得强套 Java 后端。
+1. 先用 `list_candidates` 搜索或展示摘要。未确认前，不读取候选人上下文、简历、画像或历史会话。
+2. 展示候选人 ID、姓名/备注，要求用户明确二次确认。姓名不是主键；同名时必须选择 `candidateId`。
+3. 锁定 `ConfirmedCandidateContext`：`candidateId`、`displayName`、`confirmedByUser: true`、`confirmedAt`、`activeResumeArtifactKey`、`selectedDomain`。本轮任何 MCP 读取或提交都使用此 ID。
+4. 仅在锁定后调用 `get_candidate_context`；询问当前简历、是否更换/上传或不使用。简历声明只用于出题，绝不直接变成能力证据。
+5. 领域优先级为本轮明确方向、简历、候选人上下文、Java 后端默认；混合材料且无法可靠判断时让用户选择。
 
 ## 面试执行
 
-- 一次只问一道主问题，可根据回答连续追问；面试中不提供完整标准答案。
-- 用户说“不会”时保留原回答，最多一次启发追问，随后继续，避免反复逼问。
-- 使用简历时目标题源为：简历/项目 35%、历史弱点变式 30%、领域知识 25%、算法与场景 10%；不使用简历时为 35%、45%、20%。取整可调整，但弱点复测不超过总题数 40%，且不得原题重复。
-- 每题记录 `question_id`、领域、`source_tags`、`topic_tags`、简历声明 ID、弱点 ID、原问题、原回答与重要追问。项目覆盖事实、原理、异常和方案比较。
-- 无简历无画像时执行首次 Java 后端模拟；实际材料为大模型、算法等领域时按材料组织问题。
+- 一次只问一道主问题，可连续追问；面试中不提供完整标准答案。
+- 用户说“不会”时保留原回答，最多一次启发追问后继续。
+- 使用简历时题源目标：简历/项目 35%、历史弱点变式 30%、领域知识 25%、算法与场景 10%；不使用简历时为 35%、45%、20%。弱点复测不超过总题数 40%，不得原题重复。
+- 每题记录 `questionId`、领域、`sourceTags`、`topicTags`、简历声明 ID、弱点 ID、原问题、原回答、追问和时间线。
 
-## 结束与交接
+## 结束、不可变产物与交接
 
-用户说“结束面试”或达到约定题量后，立即固化 `MOCK-*` 原始会话、`raw_transcript.md` 和带 SHA-256 的交接包。会话状态为 `review_pending`。如果运行环境能够明确继续调用 reviewing Skill，则它消费该不可变会话，按统一标准生成 Review、报告和事件；无法调用时必须说明限制，保留 `review_pending`，不得编造简化评分或污染画像。
+结束时生成 `sessionId = MOCK-<UTC>-<uuid>`，并以同一个 `candidateId/sessionId` 调用 MCP 依次提交：
 
-本轮正式云端后端为用户授权的 Google Drive；按 reviewing Skill 的 `references/google-drive-runtime.md` 写入候选人锁定范围内的会话交接包。连接器不可用时标记 `cloud_persistence_pending`，保留已固化原始会话并明确受阻点；不得将临时路径称为云端保存成功。`D:\\Interviews` 只能是用户手动下载后的备份，绝不作为运行依赖。
+1. `session.json`：`artifactType: "session"`，完整锁定上下文、题目索引和状态 `review_pending`。
+2. `raw_transcript.md`：`artifactType: "raw_transcript"`，原始问答、追问和时间线，不做事后改写。
+
+每个提交均必须具备：
+
+```json
+{
+  "schemaVersion": "1",
+  "artifactId": "UUID",
+  "artifactKey": "<candidateId>:interview:<sessionId>:<artifactType>:v1",
+  "candidateId": "...",
+  "sourceSkill": "interview",
+  "sessionId": "...",
+  "artifactType": "session | raw_transcript",
+  "fileName": "session.json | raw_transcript.md",
+  "contentType": "application/json | text/markdown",
+  "contentBase64": "...",
+  "sha256": "<content bytes sha256>",
+  "createdAt": "ISO-8601"
+}
+```
+
+`submit_artifact` 返回 `202` 即表示已可靠进入本机 Outbox/云端任务链路，不等同于 Drive 已完成；向用户说明“已提交后台同步”。相同 `artifactKey + sha256` 可安全重试；同 key 不同 SHA-256 是冲突，停止并调查。随后将 `sessionId`、两项 `artifactKey` 和 `review_pending` 交给 `reviewing-java-backend-interviews`。

@@ -1,4 +1,4 @@
 interface:
-  display_name: "真实面试复盘"
+  display_name: "面试复盘"
   short_description: "候选人确认后统一复盘模拟或真实面试并确定性更新画像。"
   default_prompt: "使用 $reviewing-java-backend-interviews，先确认候选人，再复盘本场面试。"
