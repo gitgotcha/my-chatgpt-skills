@@ -14,6 +14,7 @@
 - 面试使用独立的 `interview/` 身份空间，不与 `algorithm/` 共用注册记录或用户目录。
 - 每个新对话都必须重新列出、选择并验证身份；身份绑定只在当前对话有效。
 - MCP 对外只保留 `submit_event`，但该工具可依据固定 `eventType` 在内部执行必要的 Drive 查询。
+- 为避免移除旧工具后破坏现有算法学习，`algorithm-learning` 的身份与学习事件调用也迁移到同一个 `submit_event`；算法答题行为保持不变。
 - 新对话通过同一个工具读取历史会话，支持跨对话复盘。
 - 云端会话、复盘、画像和身份数据全部为 JSON。
 - 模拟面试结束时在本地生成会话 JSON。
@@ -115,7 +116,7 @@ interview/
 }
 ```
 
-`namespace` 必须来自服务端枚举。面试流程固定为 `interview`，不得包含路径片段。
+`namespace` 必须来自服务端枚举，只允许 `algorithm` 或 `interview`。面试流程固定为 `interview`，不得包含路径片段。
 
 允许的 `eventType`：
 
@@ -128,6 +129,7 @@ interview/
 | `interview.session.load` | 读取指定会话及其有效复盘事件 |
 | `interview.session.completed` | 提交完整模拟或真实面试会话事件 |
 | `interview.review.completed` | 提交完整复盘事件并尝试重建画像快照 |
+| `algorithm.learning.completed` | 为已验证的算法用户追加一个学习事件，不改变算法答题内容 |
 
 统一响应：
 
@@ -364,4 +366,4 @@ Word 生成或渲染失败不回滚云端事件或本地报告 JSON。Skill 必�
 
 ## 实施边界
 
-本次实施只修改 MCP、两个面试 Skill、与其直接相关的协议/Schema/报告脚本和测试。旧姓名目录和旧云端数据不迁移。与面试重构无关的算法答疑、后端项目学习和其他插件行为不在本次范围内。
+本次实施修改 MCP、两个面试 Skill、与其直接相关的协议/Schema/报告脚本和测试，并把 `algorithm-learning` 的身份与事件调用迁移到唯一的 `submit_event`。算法答疑内容与后端项目学习行为不变。旧姓名目录和旧云端数据不迁移。
