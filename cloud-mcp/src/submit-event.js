@@ -12,18 +12,27 @@ export async function dispatchSubmitEvent(env, args, deps) {
     if (!stores.has(namespace)) stores.set(namespace, deps.namespaceStores?.[namespace] ?? createNamespaceStore({ namespace, drive }));
     return stores.get(namespace);
   };
-  const interviewStore = createInterviewStore({
-    eventStore: createEventStore({ namespaceStore: namespaceStore("interview"), drive })
-  });
+  const eventStores = new Map();
+  const eventStore = (namespace) => {
+    if (!eventStores.has(namespace)) {
+      eventStores.set(namespace, createEventStore({ namespace, namespaceStore: namespaceStore(namespace), drive }));
+    }
+    return eventStores.get(namespace);
+  };
+  const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview") });
   const identity = (payload) => ({ userId: payload.userId, username: payload.username });
   const handlers = {
     "identity.list": (_env, { namespace }) => namespaceStore(namespace).listIdentities(),
     "identity.create": (_env, { namespace, payload }) => namespaceStore(namespace).createIdentity(payload),
     "identity.verify": (_env, { namespace, payload }) => namespaceStore(namespace).verifyIdentity(payload),
-    "interview.session.list": (_env, { payload }) => interviewStore.listSessions(identity(payload)),
-    "interview.session.load": (_env, { payload }) => interviewStore.loadSession(identity(payload), payload.sessionId),
-    "interview.session.completed": (_env, { payload }) => interviewStore.submitSession(identity(payload), payload.event),
-    "interview.review.completed": (_env, { payload }) => interviewStore.submitReview(identity(payload), payload.event)
+    "interview.session.list": (_env, { payload }) => interviewStore().listSessions(identity(payload)),
+    "interview.session.load": (_env, { payload }) => interviewStore().loadSession(identity(payload), payload.sessionId),
+    "interview.session.completed": (_env, { payload }) => interviewStore().submitSession(identity(payload), payload.event),
+    "interview.review.completed": (_env, { payload }) => interviewStore().submitReview(identity(payload), payload.event),
+    "algorithm.learning.completed": (_env, { namespace, payload }) => {
+      if (!payload?.event || payload.event.eventType !== "algorithm.learning.completed") throw new ProtocolError("invalid_event");
+      return eventStore(namespace).appendEvent(identity(payload), payload.event).then(({ event, receipt }) => ({ status: "ok", event, receipt }));
+    }
   };
   const handler = deps.handlers?.[envelope.eventType] ?? handlers[envelope.eventType];
   if (typeof handler !== "function") {

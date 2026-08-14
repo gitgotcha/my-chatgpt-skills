@@ -21,8 +21,9 @@ export async function canonicalHash(event) {
 const hasOnlyParent = (file, parentId) => Array.isArray(file?.parents) && file.parents.length === 1 && file.parents[0] === parentId;
 const validId = (value) => typeof value === "string" && UUID.test(value);
 
-export function createEventStore({ namespaceStore, drive, canonicalHash: hash = canonicalHash }) {
+export function createEventStore({ namespace = "interview", namespaceStore, drive, canonicalHash: hash = canonicalHash }) {
   if (!namespaceStore?.verifyIdentity || !drive?.rootFolderId) throw new Error("invalid_event_store");
+  if (!new Set(["algorithm", "interview"]).has(namespace)) throw new Error("invalid_namespace");
 
   async function verify(identity) {
     const result = await namespaceStore.verifyIdentity(identity);
@@ -31,8 +32,8 @@ export function createEventStore({ namespaceStore, drive, canonicalHash: hash = 
   }
 
   async function eventFolder(identity, create) {
-    const interview = create ? await drive.ensureFolder(drive.rootFolderId, "interview") : await drive.findFolder(drive.rootFolderId, "interview");
-    const users = interview && (create ? await drive.ensureFolder(interview.id, "users") : await drive.findFolder(interview.id, "users"));
+    const namespaceRoot = create ? await drive.ensureFolder(drive.rootFolderId, namespace) : await drive.findFolder(drive.rootFolderId, namespace);
+    const users = namespaceRoot && (create ? await drive.ensureFolder(namespaceRoot.id, "users") : await drive.findFolder(namespaceRoot.id, "users"));
     const user = users && (create ? await drive.ensureFolder(users.id, identity.userId) : await drive.findFolder(users.id, identity.userId));
     const events = user && (create ? await drive.ensureFolder(user.id, "events") : await drive.findFolder(user.id, "events"));
     return events && hasOnlyParent(events, user.id) ? events : null;

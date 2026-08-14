@@ -18,7 +18,8 @@ const PAYLOAD_FIELDS = new Map([
   ["interview.session.list", ["userId", "username"]],
   ["interview.session.load", ["userId", "username", "sessionId"]],
   ["interview.session.completed", ["userId", "username", "event"]],
-  ["interview.review.completed", ["userId", "username", "event"]]
+  ["interview.review.completed", ["userId", "username", "event"]],
+  ["algorithm.learning.completed", ["userId", "username", "event"]]
 ]);
 
 export class ProtocolError extends Error {
@@ -42,6 +43,9 @@ export function validateEnvelope(input) {
     throw new ProtocolError("invalid_event_type");
   }
   if (input.eventType.startsWith("interview.") && input.namespace !== "interview") {
+    throw new ProtocolError("invalid_event_type");
+  }
+  if (input.eventType.startsWith("algorithm.") && input.namespace !== "algorithm") {
     throw new ProtocolError("invalid_event_type");
   }
   if (typeof input.requestId !== "string" || !input.requestId.trim()) {

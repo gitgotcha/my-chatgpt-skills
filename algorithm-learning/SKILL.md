@@ -32,15 +32,23 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 ### 姓名目录
 
-1. 新算法对话先询问用户名，并调用 `find_or_create_candidate(displayName)`。MCP 只在 Drive 根目录查找同名文件夹；找到即复用，找不到即创建同名文件夹与 `identity.json`。
-2. 返回成功后，把 `displayName` 绑定到本对话并自动处理被暂存的请求。同名永远视为同一用户，不使用注册表、用户 ID 或额外确认步骤。
-3. 同一对话后续请求沿用已绑定姓名；只有用户明确说“切换用户”或“我不是刚才那个人”时才重新询问姓名。
+1. 新算法对话先暂存用户请求，再调用唯一 MCP 工具 `submit_event`，发送
+   `schemaVersion:"1.2"`、`namespace:"algorithm"`、`eventType:"identity.list"`，只读取最小身份注册记录。
+2. 展示 `A. 用户名 / B. 用户名 / 新建用户`。用户选择已有身份时调用
+   `submit_event` 的 `identity.verify`（payload 为 `{userId, username}`）；选择新建时调用
+   `identity.create`（payload 为 `{username}`）。验证或创建返回 `status:"ok"` 后，才把
+   `{userId, username}` 绑定到当前对话并处理暂存请求。
+3. 新对话不得复用旧绑定，必须重新执行 `identity.list` 和 `identity.verify`/`identity.create`。
+   同一对话后续请求沿用绑定身份，除非用户明确要求切换用户；切换时解除绑定并重新执行门禁。
 
 ### 追加式学习记录
 
-1. 答疑完成后构造学习事件，并调用 `reliable_drive_sync.submit_event({ displayName, event })`。`eventKey` 使用 `<displayName>:algorithm-learning:<problem-slug>:<ISO-8601>`。
+1. 答疑完成后构造完整的 schema-1.2 学习事件，并调用唯一 MCP 工具 `submit_event`：
+   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，payload 为
+   `{userId, username, event}`。事件本身必须包含匹配身份的 `userId`、`username`、UUID `eventId`、
+   `eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
 2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
-3. `submit_event` 返回 Drive 文件 ID 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。
+3. `submit_event` 返回 `status:"ok"` 和真实 Drive `receipt.fileId` 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。
 4. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为新事件；未完成题在下一日优先保留。
 
 ## 专项检查与回答前检查
@@ -49,6 +57,6 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 - 是否真正定位到用户代码的问题，并保持最小修改？
 - 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
-- 是否已用姓名定位 Drive 文件夹，并以事件记录明确证据？
+- 是否已通过 `identity.list`/`identity.verify` 定位已验证用户，并以事件记录明确证据？
 - 事件是否已返回 Drive 文件 ID？
 - 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？
