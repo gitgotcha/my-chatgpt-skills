@@ -79,7 +79,7 @@ test("identity creation writes registration last and returns a verified binding"
   });
   const result = await store.createIdentity({ username: " 乔炳源 " });
   assert.equal(result.status, "ok");
-  assert.deepEqual(result.identity, { userId: USER_ID, username: "乔炳源" });
+  assert.deepEqual(result.identity, { userId: USER_ID, username: "乔炳源", verified: true });
   assert.equal(operations.at(-1).name, `registration-${USER_ID}.json`);
 });
 

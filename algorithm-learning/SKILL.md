@@ -32,6 +32,8 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 ### 姓名目录
 
+完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
+
 1. 新算法对话先暂存用户请求，再调用唯一 MCP 工具 `submit_event`，发送
    `schemaVersion:"1.2"`、`namespace:"algorithm"`、`eventType:"identity.list"`，只读取最小身份注册记录。
 2. 展示 `A. 用户名 / B. 用户名 / 新建用户`。用户选择已有身份时调用

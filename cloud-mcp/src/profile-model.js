@@ -26,10 +26,12 @@ function changeEvidence(change, event) {
 
 /** Rebuild the interview profile from verified, immutable review events only. */
 export function rebuildInterviewProfile(events, { now = () => new Date().toISOString() } = {}) {
-  const candidates = (Array.isArray(events) ? events : [])
+  const reviewEvents = (Array.isArray(events) ? events : [])
     .filter((event) => event?.schemaVersion === "1.2" && event.eventType === REVIEW_TYPE
-      && event.applyProfileChanges === true && Array.isArray(event.profileChanges)
-      && text(event.eventId) && text(event.eventKey) && text(event.sessionId))
+      && text(event.eventId) && text(event.eventKey) && text(event.sessionId)
+      && text(event.userId) && text(event.username));
+  const candidates = reviewEvents
+    .filter((event) => event.applyProfileChanges === true && Array.isArray(event.profileChanges))
     .sort(compareEvents);
 
   // A correction is a new immutable version, not an additional copy of the old review.
@@ -39,7 +41,10 @@ export function rebuildInterviewProfile(events, { now = () => new Date().toISOSt
     if (!current || (Number(event.reviewVersion) || 0) >= (Number(current.reviewVersion) || 0)) latestBySession.set(event.sessionId, event);
   }
   const approved = [...latestBySession.values()].sort(compareEvents);
-  const first = approved[0] ?? candidates[0] ?? {};
+  // Identity metadata comes from any verified review, including a review that
+  // intentionally opted out of profile application. Otherwise a valid
+  // profile_cache snapshot would lose its user binding when apply=false.
+  const first = approved[0] ?? candidates[0] ?? reviewEvents[0] ?? {};
   const domainProfiles = {};
   const generalCompetencies = {};
 

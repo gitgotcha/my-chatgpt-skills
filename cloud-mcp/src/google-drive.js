@@ -93,9 +93,16 @@ export function createDriveRepository(env, deps = {}) {
     if (options.foldersOnly) clauses.push("mimeType = 'application/vnd.google-apps.folder'");
     if (options.jsonOnly) clauses.push("mimeType = 'application/json'");
     const query = encodeURIComponent(clauses.join(" and "));
-    const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(${driveFields})`, fetchImpl, { list: true });
-    const payload = await response.json();
-    return payload.files ?? [];
+    const files = [];
+    let pageToken;
+    do {
+      const token = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+      const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=nextPageToken,files(${driveFields})${token}`, fetchImpl, { list: true });
+      const payload = await response.json();
+      files.push(...(payload.files ?? []));
+      pageToken = payload.nextPageToken;
+    } while (pageToken);
+    return files;
   });
   const readJsonFileImpl = deps.readJsonFile ?? (async (fileId) => {
     const id = requiredParentId(fileId);

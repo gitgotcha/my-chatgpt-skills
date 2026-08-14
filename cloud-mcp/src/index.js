@@ -12,7 +12,15 @@ const tools = [{
       schemaVersion: { type: "string" },
       namespace: { type: "string" },
       eventType: { type: "string" },
-      payload: { type: "object", additionalProperties: false },
+      identity: {
+        type: "object",
+        additionalProperties: false,
+        required: ["userId", "username"],
+        properties: { userId: { type: "string" }, username: { type: "string" }, verified: { type: "boolean" } }
+      },
+      // Event payloads are deliberately open at the MCP description layer.
+      // The Worker applies the event-type-specific schema before dispatching.
+      payload: { type: "object" },
       requestId: { type: "string" }
     }
   }
@@ -23,7 +31,8 @@ const error = (id, code, message) => Response.json({ jsonrpc: "2.0", id, error: 
 
 export async function handleRequest(request, env, deps = {}) {
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-  if (request.headers.get("authorization") !== `Bearer ${env.MCP_BEARER_TOKEN}`) return new Response("Unauthorized", { status: 401 });
+  if (typeof env?.MCP_BEARER_TOKEN !== "string" || !env.MCP_BEARER_TOKEN.trim()
+    || request.headers.get("authorization") !== `Bearer ${env.MCP_BEARER_TOKEN}`) return new Response("Unauthorized", { status: 401 });
   const message = await request.json();
   if (message.method === "initialize") return result(message.id, { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "reliable-drive-sync", version: "1.0.0" } });
   if (message.method === "tools/list") return result(message.id, { tools });

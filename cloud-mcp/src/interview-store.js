@@ -38,7 +38,7 @@ export function createInterviewStore({ eventStore, drive, now = () => new Date()
   }
 
   async function submitSession(identity, event) {
-    if (!event || !["interview.session.completed", "interview.review.completed"].includes(event.eventType)) throw new Error("invalid_event_type");
+    if (!event || event.eventType !== "interview.session.completed") throw new Error("invalid_event_type");
     if (!validSessionId(event.sessionId)) throw new Error("invalid_session_id");
     return eventStore.appendEvent(identity, event);
   }

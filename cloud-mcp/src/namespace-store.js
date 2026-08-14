@@ -54,7 +54,7 @@ export function createNamespaceStore({ namespace, drive, now = () => new Date().
     if (!hasOnlyParent(identity, matches[0].id) || identity.value?.schemaVersion !== "1.2"
       || identity.value.userId !== userId || normalizeUsername(identity.value.username) !== normalizedUsername
       || identity.value.username !== normalizedUsername) throw new Error("identity_mismatch");
-    return { status: "ok", identity: { userId, username: normalizedUsername } };
+    return { status: "ok", identity: { userId, username: normalizedUsername, verified: true } };
   }
 
   async function createIdentity({ username }) {
@@ -76,7 +76,7 @@ export function createNamespaceStore({ namespace, drive, now = () => new Date().
       schemaVersion: "1.2", userId, username: normalizedUsername, status: "active", createdAt
     });
     if (!validRegistration(registration, location.registry.id) || registration.value.userId !== userId) throw new Error("identity_mismatch");
-    return { status: "ok", identity: { userId, username: normalizedUsername } };
+    return { status: "ok", identity: { userId, username: normalizedUsername, verified: true } };
   }
 
   return {

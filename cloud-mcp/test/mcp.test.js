@@ -52,11 +52,19 @@ test("MCP exposes only submit_event", async () => {
   const payload = await response.json();
   assert.deepEqual(payload.result.tools.map((tool) => tool.name), ["submit_event"]);
   assert.equal(payload.result.tools[0].inputSchema.additionalProperties, false);
-  assert.equal(payload.result.tools[0].inputSchema.properties.payload.additionalProperties, false);
+  assert.equal(payload.result.tools[0].inputSchema.properties.payload.type, "object");
+  assert.deepEqual(payload.result.tools[0].inputSchema.properties.identity.required, ["userId", "username"]);
 });
 
 test("MCP rejects an incorrect bearer token", async () => {
   const response = await handleRequest(request("tools/list", {}, "wrong"), env());
+  assert.equal(response.status, 401);
+});
+
+test("MCP fails closed when the bearer secret is missing", async () => {
+  const response = await handleRequest(request("tools/list", {}, "undefined"), {
+    GOOGLE_DRIVE_FOLDER_ID: "root"
+  });
   assert.equal(response.status, 401);
 });
 
@@ -117,6 +125,17 @@ test("protocol rejects interview session events in another namespace", () => {
     payload: { userId: "00000000-0000-4000-8000-000000000001", username: "Ada" },
     requestId: "00000000-0000-4000-8000-000000000007"
   }), /invalid_event_type/);
+});
+
+test("protocol validates the concrete session event schema at the Worker boundary", () => {
+  assert.throws(() => validateEnvelope({
+    schemaVersion: "1.2", namespace: "interview", eventType: "interview.session.completed",
+    payload: {
+      userId: "00000000-0000-4000-8000-000000000001", username: "Ada",
+      event: { schemaVersion: "1.2", eventType: "interview.review.completed" }
+    },
+    requestId: "00000000-0000-4000-8000-000000000009"
+  }), /invalid_event/);
 });
 
 test("submit_event rejects unknown top-level envelope fields", async () => {
@@ -192,8 +211,13 @@ test("algorithm learning events use the algorithm namespace event folder", async
     userId: identity.userId,
     username: identity.username,
     observedAt: "2026-08-14T10:00:00.000Z",
+    source: "qa",
+    topic: "two-sum",
+    problem: { title: "Two Sum", source: "Hot100", url: "" },
     outcome: "consulted",
-    evidence: "用户请求讲解两数之和。"
+    evidence: "用户请求讲解两数之和。",
+    tags: ["hash-map"],
+    confidence: "medium"
   };
   const response = await handleRequest(request("tools/call", {
     name: "submit_event",
