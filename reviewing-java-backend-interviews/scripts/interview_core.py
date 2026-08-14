@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
+import json
 from math import floor
+from pathlib import Path
+import re
 
 SCHEMA_VERSION = "1.0"
+REVIEW_SCHEMA_VERSION = "1.2"
+
+_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_SESSION_ID = re.compile(r"^(?:MOCK|REAL)-[^/\\]+$")
+_EVIDENCE_TYPES = {"full_transcript", "partial_transcript", "user_recall", "structured_notes", "live_notes"}
+_EVIDENCE_CONFIDENCE = {"high", "medium", "low"}
 
 
 class ArtifactValidationError(ValueError):
@@ -18,6 +31,152 @@ class CandidateLockError(ValueError):
 
 class ProfileConflictError(ValueError):
     """Raised when optimistic profile-version validation fails."""
+
+
+class ReviewValidationError(ValueError):
+    """Raised when a schema-1.2 review event is unsafe to submit."""
+
+
+def _require_identity(identity: dict[str, object]) -> tuple[str, str]:
+    if not isinstance(identity, dict) or identity.get("verified") is not True:
+        raise ReviewValidationError("verified identity is required")
+    user_id = identity.get("userId")
+    username = identity.get("username")
+    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
+        raise ReviewValidationError("verified identity requires a UUID userId")
+    if not isinstance(username, str) or not username.strip():
+        raise ReviewValidationError("verified identity requires a username")
+    return user_id, username.strip()
+
+
+def _require_iso(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ReviewValidationError(f"{field} must be an ISO-8601 string")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ReviewValidationError(f"{field} must be an ISO-8601 string") from error
+    return value
+
+
+def _require_session(session: dict[str, object], user_id: str, username: str) -> tuple[str, str, list[dict[str, object]]]:
+    if not isinstance(session, dict) or session.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
+        raise ReviewValidationError("session must use schemaVersion 1.2")
+    if session.get("eventType") != "interview.session.completed":
+        raise ReviewValidationError("source session must be completed")
+    if session.get("userId") != user_id or str(session.get("username", "")).strip() != username:
+        raise ReviewValidationError("identity does not match source session")
+    session_id = session.get("sessionId")
+    if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
+        raise ReviewValidationError("sessionId must use MOCK-/REAL- and contain no path separators")
+    source_type = session.get("interviewType")
+    if source_type not in {"mock", "real"}:
+        raise ReviewValidationError("session interviewType must be mock or real")
+    questions = session.get("questions")
+    if not isinstance(questions, list) or not all(isinstance(item, dict) for item in questions):
+        raise ReviewValidationError("source session questions must be a list")
+    event_id = session.get("eventId")
+    if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
+        raise ReviewValidationError("source session eventId must be a UUID")
+    return session_id, source_type, questions
+
+
+def create_review_event(
+    identity: dict[str, object],
+    session: dict[str, object],
+    *,
+    question_reviews: list[dict[str, object]],
+    profile_changes: list[dict[str, object]],
+    recommendations: list[str],
+    apply_profile_changes: bool | None = None,
+    review_version: int,
+    event_id: str,
+    completed_at: str,
+    evidence_type: str = "full_transcript",
+    evidence_confidence: str = "high",
+) -> dict[str, object]:
+    """Build one immutable schema-1.2 ``interview.review.completed`` event."""
+    user_id, username = _require_identity(identity)
+    session_id, source_type, source_questions = _require_session(session, user_id, username)
+    if not isinstance(review_version, int) or review_version < 1:
+        raise ReviewValidationError("reviewVersion must be a positive integer")
+    if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
+        raise ReviewValidationError("eventId must be a UUID")
+    _require_iso(completed_at, "completedAt")
+    if evidence_type not in _EVIDENCE_TYPES:
+        raise ReviewValidationError("unsupported evidenceType")
+    if evidence_confidence not in _EVIDENCE_CONFIDENCE:
+        raise ReviewValidationError("unsupported evidenceConfidence")
+    if not isinstance(question_reviews, list) or not all(isinstance(item, dict) for item in question_reviews):
+        raise ReviewValidationError("questionReviews must be a list of objects")
+    source_ids = {item.get("questionId") for item in source_questions}
+    seen_ids: set[object] = set()
+    for item in question_reviews:
+        question_id = item.get("questionId")
+        if not isinstance(question_id, str) or not question_id.strip() or question_id not in source_ids:
+            raise ReviewValidationError("questionReviews must reference source question IDs")
+        if question_id in seen_ids:
+            raise ReviewValidationError("questionReviews cannot contain duplicate question IDs")
+        seen_ids.add(question_id)
+    if not isinstance(profile_changes, list) or not all(isinstance(item, dict) for item in profile_changes):
+        raise ReviewValidationError("profileChanges must be a list of objects")
+    if not isinstance(recommendations, list) or not all(isinstance(item, str) and item.strip() for item in recommendations):
+        raise ReviewValidationError("recommendations must be a list of non-empty strings")
+    if source_type == "mock":
+        applies = True if apply_profile_changes is None else apply_profile_changes
+        if not isinstance(applies, bool):
+            raise ReviewValidationError("applyProfileChanges must be boolean")
+    else:
+        if not isinstance(apply_profile_changes, bool):
+            raise ReviewValidationError("real review requires explicit applyProfileChanges confirmation")
+        applies = apply_profile_changes
+    return {
+        "schemaVersion": REVIEW_SCHEMA_VERSION,
+        "eventId": event_id,
+        "eventKey": f"{user_id}:interview:review:{session_id}:v{review_version}",
+        "eventType": "interview.review.completed",
+        "userId": user_id,
+        "username": username,
+        "sessionId": session_id,
+        "reviewVersion": review_version,
+        "sourceSessionEventId": session["eventId"],
+        "sourceType": source_type,
+        "evidenceType": evidence_type,
+        "evidenceConfidence": evidence_confidence,
+        "questionReviews": deepcopy(question_reviews),
+        "profileChanges": deepcopy(profile_changes),
+        "recommendations": list(recommendations),
+        "applyProfileChanges": applies,
+        "completedAt": completed_at,
+    }
+
+
+def save_review_json(
+    review_event: dict[str, object],
+    output_root: str | Path,
+    persistence_status: str,
+    drive_receipt: dict[str, object] | None = None,
+) -> Path:
+    """Write a portable local report JSON; it is never a profile input."""
+    if not isinstance(review_event, dict) or review_event.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
+        raise ReviewValidationError("review event must use schemaVersion 1.2")
+    user_id = review_event.get("userId")
+    session_id = review_event.get("sessionId")
+    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
+        raise ReviewValidationError("review event requires a UUID userId")
+    if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
+        raise ReviewValidationError("review event requires a safe sessionId")
+    if persistence_status not in {"ok", "cloud_persistence_pending", "profile_cache_pending"}:
+        raise ReviewValidationError("unsupported persistenceStatus")
+    destination = Path(output_root) / "interview" / user_id
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / f"interview-{session_id}-report.json"
+    payload = deepcopy(review_event)
+    payload["persistenceStatus"] = persistence_status
+    if drive_receipt is not None:
+        payload["driveReceipt"] = deepcopy(drive_receipt)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 _REQUIRED: dict[str, tuple[str, ...]] = {

@@ -1,46 +1,44 @@
 ---
 name: reviewing-java-backend-interviews
-description: Use when reviewing a candidate-locked mock or real interview through the reliable-drive-sync MCP, with immutable evidence and deterministic profile update events.
+description: Use when reviewing a verified mock or real interview through one immutable submit_event handoff, with local JSON and Word output.
 ---
 
-# 统一面试复盘、画像事件与 MCP
+# Java 后端面试复盘
 
-本 Skill 是模拟与真实面试的统一复盘方。**不得直接操作 Google Drive、Google API 或云端 HTTP。**候选人读取、会话证据读取和所有产物写入都必须经过 `reliable-drive-sync` MCP；MCP 直接读写同名的 Drive 文件夹。
+本 Skill 负责跨对话身份确认、历史会话选择、逐题复盘、结构化画像变化和本地报告生成。所有远端交互只能使用唯一的 `submit_event` MCP 工具；本 Skill 不调用其他远端工具，也不把本地报告作为画像输入。
 
-## MCP 工具与边界
+## 新对话身份门禁
 
-- `find_or_create_candidate(displayName)`：直接查找或创建同名 Drive 文件夹。
-- `list_candidates(query?, limit?)`：列出 Drive 姓名文件夹摘要。
-- `get_candidate_context(displayName, selectedDomain?, resumeId?, sessionId?)`：读取姓名文件夹的上下文。
-- `read_artifact(displayName, artifactKey)`：读取该姓名文件夹中的 JSON/Markdown 产物；DOCX 不读取全文。
-- `submit_artifact(displayName, ...)`：提交 JSON、Markdown、DOCX，不经任何直连云端渠道。
-- `submit_event(displayName, event)`：提交确定性、可重放的学习/画像事件；不可携带二进制材料。
+每次新对话都从身份门禁开始，不沿用上一段对话的身份：
 
-工具不可用或 Drive 写入错误时如实报告“尚未持久化”，立即停止本次后续持久化动作；绝不使用旧的 Drive 直写兜底。
+1. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "interview"`、`eventType: "identity.list"`。
+2. 展示最小身份选项：`A` 选择已有身份，或 `B` 创建新用户。
+3. 选择 A 时要求用户提供 `userId` 和姓名，再调用 `identity.verify`；选择 B 时仅询问姓名，再调用 `identity.create`。
+4. 只有收到 `{userId, username, verified: true}` 后，才允许读取会话摘要或会话详情。本轮绑定只在当前对话有效；用户切换身份时重新执行门禁。
 
-## 强制启动顺序
+身份失败或远端状态不是 `ok` 时暂停后续读取与写入，并如实说明尚未持久化。
 
-1. 询问候选人姓名并调用 `find_or_create_candidate(displayName)`；同名 Drive 文件夹即同一人，不需要候选人 ID 或二次确认。
-2. 用 `get_candidate_context(displayName)` 读取上下文。
-3. 找到 `MOCK-*` 的 `session.json` 与 `raw_transcript.md`；分别用 `read_artifact(displayName, artifactKey)` 读取。真实面试由用户提供原始记录后，先作为同一会话的不可变 `session.json` 与 `raw_transcript.md` 提交。
-4. 依据真实题目内容确定领域；混合且置信不足时让用户选择。
+## 会话读取与复盘
 
-## 统一复盘要求
+身份验证成功后依次调用：
 
-逐题保存原问题、候选人原回答、追问关联、正确性/完整性、缺失与错误、失分归因、更好的口语回答、完整参考答案、表达分析和变式复测。Review 中必须有 `sourceType`、`evidenceType`、`evidenceConfidence`；候选人回忆不等同完整转写。
+1. `submit_event(interview.session.list)`，只展示时间、领域、类型和复盘状态摘要。
+2. 用户选择会话后调用 `submit_event(interview.session.load)`，读取目标 schema-1.2 会话及有效复盘事件。
+3. 保留原问题、原回答、追问关联、正确性、完整性、错误、遗漏、失分原因、更好的口述回答、参考答案、表达分析和变式复测。
 
-生成以下不可变产物，使用相同的 `displayName/sessionId`，`artifactKey` 格式为 `<displayName>:interview:<sessionId>:<artifactType>:v<reviewVersion>`：
+复盘事件必须包含 `sourceSessionEventId`、`sourceType`、`evidenceType`、`evidenceConfidence`、`questionReviews`、`profileChanges`、`recommendations` 和 `applyProfileChanges`。`reviewVersion` 从 1 开始；修订时创建更高版本，不覆盖旧事件。
 
-1. `review.json`，`artifactType: "review"`，包含逐题分析与版本。
-2. `profile_update_event.json`，`artifactType: "profile_update"`，仅包含确定性画像变化、`expectedProfileVersion`、`eventKey`、证据引用与状态。
-3. `review_report.docx`，`artifactType: "report"`，必须在提交前渲染检查；报告含候选人姓名、类型、领域、时间、session ID、版本、逐题分析、画像变化和下一轮建议。
+模拟会话的画像变化默认允许应用。真实会话必须明确询问用户是否确认：未确认时保存 `applyProfileChanges: false`；确认后创建下一不可变版本并设置为 `true`。只有结构化字段进入画像重建，自然语言报告不会改变画像。
 
-每个产物都使用 `submit_artifact`，以原始字节 Base64 和 SHA-256 构成不可变提交。`profile_update` 的 `dependsOn` 必须列出本次 `session`、`raw_transcript` 与 `review` 的 artifact keys；`report` 至少依赖 `review`。
+## 唯一提交与本地输出
 
-## 确定性画像事件
+构造完整 `interview.review.completed` JSON 后只调用一次 `submit_event`。响应包含真实回执时记录 `persistenceStatus: "ok"`；写入失败仍生成本地 JSON 并标记 `cloud_persistence_pending`，不得假称远端已保存。事件已保存但画像缓存失败时标记 `profile_cache_pending`。
 
-Python/本地确定性逻辑只负责 Schema 校验、事件应用和快照重放，不重新调用模型。事件键固定为 `displayName + sessionId + reviewVersion`；技术弱点按领域隔离，通用能力可跨领域累计；同一弱点仅在两个不同会话、不同问法的正确证据后关闭。
+本地复盘文件统一保存为：
 
-模拟复盘的已校验事件可通过 `submit_event` 自动提交。真实复盘默认只提交报告和变化预览，状态 `pending`；只有用户明确确认才提交 `profile_update` 事件。拒绝时保留报告、将变更标记 `rejected`，当前画像不变。修正已应用 Review 时创建 V2/CorrectionEvent，并从 V1 前快照重放，不丢失后续历史。
+```text
+outputs/interview/<userId>/interview-<sessionId>-report.json
+outputs/interview/<userId>/interview-<sessionId>-report.docx
+```
 
-每次提交只有在 Drive 返回文件 ID 后才可称为已保存；任一错误时停止本次后续写入并保留可重试的内容在对话中。
+先用 `save_review_json` 写完整事件副本，再以该 JSON 作为 `create_review_report(report_json, report_docx)` 的唯一输入生成 Word，并执行渲染检查。Word 生成失败不回滚 JSON 或已提交事件；明确说明失败原因并保留可重试文件。
