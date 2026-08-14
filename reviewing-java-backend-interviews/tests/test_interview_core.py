@@ -5,12 +5,98 @@ import unittest
 from scripts.interview_core import (
     ArtifactValidationError,
     ProfileConflictError,
+    ReviewValidationError,
     apply_review_event,
+    create_review_event,
     plan_question_sources,
     rebuild_profile,
     resolve_domain,
     validate_artifact,
 )
+
+
+USER_ID = "11111111-1111-4111-8111-111111111111"
+SESSION_EVENT_ID = "22222222-2222-4222-8222-222222222222"
+REVIEW_EVENT_ID = "33333333-3333-4333-8333-333333333333"
+SESSION_ID = "REAL-20260814T000000Z-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+
+def _review_identity() -> dict[str, object]:
+    return {"userId": USER_ID, "username": "测试用户", "verified": True}
+
+
+def _review_session() -> dict[str, object]:
+    return {
+        "schemaVersion": "1.2",
+        "eventId": SESSION_EVENT_ID,
+        "eventType": "interview.session.completed",
+        "userId": USER_ID,
+        "username": "测试用户",
+        "sessionId": SESSION_ID,
+        "interviewType": "real",
+        "domain": "java-backend",
+        "questions": [{"questionId": "Q-001"}],
+    }
+
+
+class ReviewEventContractTests(unittest.TestCase):
+    def test_review_event_contains_schema_required_identity_and_evidence_fields(self) -> None:
+        event = create_review_event(
+            _review_identity(),
+            _review_session(),
+            question_reviews=[{
+                "questionId": "Q-001",
+                "assessment": "回答不完整",
+                "evidence": {"source": "answer"},
+                "recommendations": ["补充并发控制"],
+            }],
+            profile_changes=[{
+                "kind": "weakness",
+                "outcome": "failed",
+                "domain": "java-backend",
+                "weaknessId": "W-001",
+                "evidenceRefs": ["Q-001"],
+            }],
+            recommendations=["复测缓存一致性"],
+            apply_profile_changes=False,
+            review_version=1,
+            event_id=REVIEW_EVENT_ID,
+            completed_at="2026-08-14T01:00:00Z",
+            evidence_type="user_recall",
+            evidence_confidence="low",
+        )
+        self.assertEqual(event["interviewType"], "real")
+        self.assertEqual(event["domain"], "java-backend")
+        self.assertEqual(event["sourceType"], "real")
+        self.assertEqual(event["evidenceType"], "user_recall")
+        self.assertEqual(event["evidenceConfidence"], "low")
+        self.assertEqual(event["questionReviews"][0]["questionId"], "Q-001")
+        self.assertEqual(event["profileChanges"][0]["kind"], "weakness")
+        self.assertFalse(event["applyProfileChanges"])
+
+    def test_review_requires_structured_question_and_profile_change_fields(self) -> None:
+        common = {
+            "identity": _review_identity(),
+            "session": _review_session(),
+            "profile_changes": [],
+            "recommendations": [],
+            "apply_profile_changes": False,
+            "review_version": 1,
+            "event_id": REVIEW_EVENT_ID,
+            "completed_at": "2026-08-14T01:00:00Z",
+        }
+        with self.assertRaisesRegex(ReviewValidationError, "assessment"):
+            create_review_event(
+                common["identity"], common["session"],
+                question_reviews=[{"questionId": "Q-001", "evidence": {}, "recommendations": []}],
+                **{key: value for key, value in common.items() if key not in {"identity", "session"}},
+            )
+        with self.assertRaisesRegex(ReviewValidationError, "profileChanges require kind"):
+            create_review_event(
+                common["identity"], common["session"], question_reviews=[],
+                profile_changes=[{"outcome": "failed"}],
+                **{key: value for key, value in common.items() if key not in {"identity", "session", "profile_changes"}},
+            )
 
 
 class ArtifactValidationTests(unittest.TestCase):
