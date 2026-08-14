@@ -44,8 +44,8 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 ### 追加式学习记录
 
 1. 答疑完成后构造完整的 schema-1.2 学习事件，并调用唯一 MCP 工具 `submit_event`：
-   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，payload 为
-   `{userId, username, event}`。事件本身必须包含匹配身份的 `userId`、`username`、UUID `eventId`、
+   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，顶层 `identity` 为
+   `{userId, username}`，payload 仅为 `{event}`。事件本身必须包含匹配身份的 `userId`、`username`、UUID `eventId`、
    `eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
 2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
 3. `submit_event` 返回 `status:"ok"` 和真实 Drive `receipt.fileId` 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。

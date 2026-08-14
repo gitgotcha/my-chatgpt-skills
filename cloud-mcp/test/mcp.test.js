@@ -201,7 +201,8 @@ test("algorithm learning events use the algorithm namespace event folder", async
       schemaVersion: "1.2",
       namespace: "algorithm",
       eventType: "algorithm.learning.completed",
-      payload: { userId: identity.userId, username: identity.username, event },
+      identity,
+      payload: { event },
       requestId: "00000000-0000-4000-8000-000000000008"
     }
   }), env(), {

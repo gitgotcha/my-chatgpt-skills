@@ -10,7 +10,7 @@ export const ALLOWED_EVENT_TYPES = new Set([
   "interview.session.completed",
   "interview.review.completed"
 ]);
-const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "payload", "requestId"]);
+const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "identity", "payload", "requestId"]);
 const PAYLOAD_FIELDS = new Map([
   ["identity.list", []],
   ["identity.create", ["username"]],
@@ -19,7 +19,7 @@ const PAYLOAD_FIELDS = new Map([
   ["interview.session.load", ["userId", "username", "sessionId"]],
   ["interview.session.completed", ["userId", "username", "event"]],
   ["interview.review.completed", ["userId", "username", "event"]],
-  ["algorithm.learning.completed", ["userId", "username", "event"]]
+  ["algorithm.learning.completed", ["event"]]
 ]);
 
 export class ProtocolError extends Error {
@@ -50,6 +50,15 @@ export function validateEnvelope(input) {
   }
   if (typeof input.requestId !== "string" || !input.requestId.trim()) {
     throw new ProtocolError("invalid_request_id");
+  }
+  if (input.identity !== undefined && (input.identity === null || Array.isArray(input.identity)
+    || typeof input.identity !== "object" || Object.keys(input.identity).some((field) => !["userId", "username"].includes(field))
+    || Object.keys(input.identity).length !== 2 || typeof input.identity.userId !== "string" || !input.identity.userId.trim()
+    || typeof input.identity.username !== "string" || !input.identity.username.trim())) {
+    throw new ProtocolError("invalid_identity");
+  }
+  if (input.eventType === "algorithm.learning.completed" && input.identity === undefined) {
+    throw new ProtocolError("invalid_identity");
   }
   if (input.payload !== undefined && (input.payload === null || Array.isArray(input.payload) || typeof input.payload !== "object")) {
     throw new ProtocolError("invalid_payload");

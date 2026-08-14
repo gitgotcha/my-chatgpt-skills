@@ -29,9 +29,9 @@ export async function dispatchSubmitEvent(env, args, deps) {
     "interview.session.load": (_env, { payload }) => interviewStore().loadSession(identity(payload), payload.sessionId),
     "interview.session.completed": (_env, { payload }) => interviewStore().submitSession(identity(payload), payload.event),
     "interview.review.completed": (_env, { payload }) => interviewStore().submitReview(identity(payload), payload.event),
-    "algorithm.learning.completed": (_env, { namespace, payload }) => {
+    "algorithm.learning.completed": (_env, { namespace, identity: boundIdentity, payload }) => {
       if (!payload?.event || payload.event.eventType !== "algorithm.learning.completed") throw new ProtocolError("invalid_event");
-      return eventStore(namespace).appendEvent(identity(payload), payload.event).then(({ event, receipt }) => ({ status: "ok", event, receipt }));
+      return eventStore(namespace).appendEvent(boundIdentity, payload.event).then(({ event, receipt }) => ({ status: "ok", event, receipt }));
     }
   };
   const handler = deps.handlers?.[envelope.eventType] ?? handlers[envelope.eventType];
