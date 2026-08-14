@@ -51,6 +51,9 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
    `eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
 2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
 3. `submit_event` 返回 `status:"ok"` 和真实 Drive `receipt.fileId` 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。
+   若返回 `cloud_persistence_pending`，表示本地事件已生成但云端事件尚未持久化；若返回
+   `profile_cache_pending`，表示事件已经持久化，但画像快照生成失败。两种状态都必须如实告知，
+   不得把待处理状态称为“已完成”。
 4. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为新事件；未完成题在下一日优先保留。
 
 ## 专项检查与回答前检查
