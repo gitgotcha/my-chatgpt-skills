@@ -98,6 +98,39 @@ class ReviewEventContractTests(unittest.TestCase):
                 **{key: value for key, value in common.items() if key not in {"identity", "session", "profile_changes"}},
             )
 
+    def test_review_rejects_unknown_nested_fields_and_invalid_optional_types(self) -> None:
+        common = {
+            "identity": _review_identity(),
+            "session": _review_session(),
+            "profile_changes": [],
+            "recommendations": [],
+            "apply_profile_changes": False,
+            "review_version": 1,
+            "event_id": REVIEW_EVENT_ID,
+            "completed_at": "2026-08-14T01:00:00Z",
+        }
+        with self.assertRaisesRegex(ReviewValidationError, "unsupported fields"):
+            create_review_event(
+                common["identity"], common["session"],
+                question_reviews=[{
+                    "questionId": "Q-001", "assessment": "ok", "evidence": {},
+                    "recommendations": [], "description": "not in contract",
+                }],
+                **{key: value for key, value in common.items() if key not in {"identity", "session"}},
+            )
+        with self.assertRaisesRegex(ReviewValidationError, "field domain"):
+            create_review_event(
+                common["identity"], common["session"], question_reviews=[],
+                profile_changes=[{"kind": "weakness", "outcome": "failed", "domain": 7}],
+                **{key: value for key, value in common.items() if key not in {"identity", "session", "profile_changes"}},
+            )
+        with self.assertRaisesRegex(ReviewValidationError, "evidenceRefs"):
+            create_review_event(
+                common["identity"], common["session"], question_reviews=[],
+                profile_changes=[{"kind": "weakness", "outcome": "failed", "evidenceRefs": ["Q-1", 3]}],
+                **{key: value for key, value in common.items() if key not in {"identity", "session", "profile_changes"}},
+            )
+
 
 class ArtifactValidationTests(unittest.TestCase):
     def test_candidate_context_requires_explicit_confirmation(self) -> None:

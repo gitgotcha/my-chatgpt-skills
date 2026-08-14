@@ -19,6 +19,10 @@ _UUID = re.compile(
 _SESSION_ID = re.compile(r"^(?:MOCK|REAL)-[^/\\]+$")
 _EVIDENCE_TYPES = {"full_transcript", "partial_transcript", "user_recall", "structured_notes", "live_notes"}
 _EVIDENCE_CONFIDENCE = {"high", "medium", "low"}
+_QUESTION_REVIEW_KEYS = {"questionId", "assessment", "evidence", "recommendations"}
+_PROFILE_CHANGE_KEYS = {
+    "kind", "outcome", "domain", "weaknessId", "variantId", "competencyId", "title", "evidenceRefs",
+}
 
 
 class ArtifactValidationError(ValueError):
@@ -115,6 +119,9 @@ def create_review_event(
     source_ids = {item.get("questionId") for item in source_questions}
     seen_ids: set[object] = set()
     for item in question_reviews:
+        unknown = set(item) - _QUESTION_REVIEW_KEYS
+        if unknown:
+            raise ReviewValidationError(f"questionReviews contain unsupported fields: {', '.join(sorted(unknown))}")
         question_id = item.get("questionId")
         if not isinstance(question_id, str) or not question_id.strip() or question_id not in source_ids:
             raise ReviewValidationError("questionReviews must reference source question IDs")
@@ -134,10 +141,21 @@ def create_review_event(
         raise ReviewValidationError("profileChanges must be a list of objects")
     valid_outcomes = {"failed", "passed", "observed", "improving", "closed"}
     for change in profile_changes:
+        unknown = set(change) - _PROFILE_CHANGE_KEYS
+        if unknown:
+            raise ReviewValidationError(f"profileChanges contain unsupported fields: {', '.join(sorted(unknown))}")
         if not isinstance(change.get("kind"), str) or not str(change["kind"]).strip():
             raise ReviewValidationError("profileChanges require kind")
         if change.get("outcome") not in valid_outcomes:
             raise ReviewValidationError("profileChanges require a supported outcome")
+        for field in ("domain", "weaknessId", "variantId", "competencyId", "title"):
+            if field in change and not isinstance(change[field], str):
+                raise ReviewValidationError(f"profileChanges field {field} must be a string")
+        if "evidenceRefs" in change and (
+            not isinstance(change["evidenceRefs"], list)
+            or not all(isinstance(value, str) for value in change["evidenceRefs"])
+        ):
+            raise ReviewValidationError("profileChanges evidenceRefs must be a list of strings")
     if not isinstance(recommendations, list) or not all(isinstance(item, str) and item.strip() for item in recommendations):
         raise ReviewValidationError("recommendations must be a list of non-empty strings")
     if source_type == "mock":
