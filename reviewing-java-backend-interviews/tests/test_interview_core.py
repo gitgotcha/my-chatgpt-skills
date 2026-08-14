@@ -145,6 +145,8 @@ class ReviewEventContractTests(unittest.TestCase):
             create_review_event(**args, review_version=True, completed_at="2026-08-14T01:00:00Z")
         with self.assertRaisesRegex(ReviewValidationError, "timezone"):
             create_review_event(**args, review_version=1, completed_at="2026-08-14T01:00:00")
+        with self.assertRaisesRegex(ReviewValidationError, "timezone"):
+            create_review_event(**args, review_version=1, completed_at="2026-08-14 01:00:00+00:00")
 
 
 class ArtifactValidationTests(unittest.TestCase):

@@ -57,7 +57,10 @@ def _require_iso(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ReviewValidationError(f"{field} must be an ISO-8601 string")
     # Cloud event timestamps must be unambiguous instants, never local/naive time.
-    if not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", value):
+    if not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+        value,
+    ):
         raise ReviewValidationError(f"{field} must include a timezone offset")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
