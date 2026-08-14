@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import json
 from pathlib import Path
+import unittest
 
 
 class SharedSchemaTests(unittest.TestCase):
@@ -10,6 +11,23 @@ class SharedSchemaTests(unittest.TestCase):
         reviewing_root = conducting_root.parent / "reviewing-java-backend-interviews"
         conducting_schema = conducting_root / "schemas" / "contracts.schema.json"
         reviewing_schema = reviewing_root / "schemas" / "contracts.schema.json"
-
         self.assertEqual(conducting_schema.read_bytes(), reviewing_schema.read_bytes())
+        contract = json.loads(conducting_schema.read_text(encoding="utf-8"))
+        self.assertEqual(set(contract["$defs"]), {
+            "Identity", "Registration", "Question", "SessionEvent",
+            "QuestionReview", "ReviewEvent", "ProfileSnapshot",
+        })
+        self.assertEqual(contract["$defs"]["SessionEvent"]["properties"]["schemaVersion"]["const"], "1.2")
+
+    def test_mock_skill_uses_identity_gate_and_one_submit_event(self) -> None:
+        skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("submit_event", skill)
+        self.assertIn("identity.list", skill)
+        self.assertIn("identity.verify", skill)
+        self.assertIn("identity.create", skill)
+        for removed in (
+            "find_or_create_candidate", "list_candidates", "get_candidate_context",
+            "read_artifact", "submit_artifact", "contentBase64", "raw_transcript.md",
+        ):
+            self.assertNotIn(removed, skill)
 
