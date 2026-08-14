@@ -15,7 +15,8 @@ function setup() {
     { ...session, eventId: "10000000-0000-4000-8000-000000000002", eventKey: "review-10", eventType: "interview.review.completed", reviewVersion: 10 },
     { ...session, eventId: "10000000-0000-4000-8000-000000000003", eventKey: "review-2", eventType: "interview.review.completed", reviewVersion: 2 },
     { ...session, eventId: "10000000-0000-4000-8000-000000000004", eventKey: "session-REAL-2-completed", sessionId: "REAL-2" },
-    { ...session, eventId: "10000000-0000-4000-8000-000000000005", eventKey: "review-invalid", eventType: "interview.review.completed", sessionId: "REAL-2", reviewVersion: "1" }
+    { ...session, eventId: "10000000-0000-4000-8000-000000000005", eventKey: "review-invalid", eventType: "interview.review.completed", sessionId: "REAL-2", reviewVersion: "1" },
+    { ...session, eventId: "10000000-0000-4000-8000-000000000006", eventKey: "session-invalid", sessionId: "../x" }
   ];
   const eventStore = {
     appendEvent: async (_requestedIdentity, value) => ({ event: value }),
@@ -43,4 +44,8 @@ test("loadSession returns review versions in numeric order", async () => {
 
 test("loadSession rejects malformed session ids", async () => {
   await assert.rejects(() => setup().loadSession(identity, "session-1"), /invalid_session_id/);
+});
+
+test("submitSession rejects path-like session identifiers", async () => {
+  await assert.rejects(() => setup().submitSession(identity, { ...session, sessionId: "../x" }), /invalid_session_id/);
 });

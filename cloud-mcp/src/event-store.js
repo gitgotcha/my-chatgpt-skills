@@ -1,6 +1,5 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const encoder = new TextEncoder();
-const DRIVE_METADATA = new Set(["contentHash", "fileId", "id", "name", "parents", "mimeType", "createdTime"]);
 
 export function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -10,7 +9,7 @@ export function canonicalJson(value) {
 
 function contentForHash(event) {
   const clone = structuredClone(event);
-  for (const key of DRIVE_METADATA) delete clone[key];
+  delete clone.contentHash;
   return clone;
 }
 
@@ -50,13 +49,17 @@ export function createEventStore({ namespaceStore, drive, canonicalHash: hash = 
     return { event: structuredClone(event), file: read };
   }
 
-  async function listVerifiedEvents(identity) {
+  async function verifiedEventRecords(identity) {
     const verifiedIdentity = await verify(identity);
     const folder = await eventFolder(verifiedIdentity, false);
     if (!folder) return [];
     const files = await drive.listJson(folder.id);
     const verified = await Promise.all(files.map((file) => validEvent(file, folder.id, verifiedIdentity)));
-    return verified.filter(Boolean).map(({ event }) => event);
+    return verified.filter(Boolean);
+  }
+
+  async function listVerifiedEvents(identity) {
+    return (await verifiedEventRecords(identity)).map(({ event }) => event);
   }
 
   function validateInput(identity, event) {
@@ -69,13 +72,11 @@ export function createEventStore({ namespaceStore, drive, canonicalHash: hash = 
     validateInput(verifiedIdentity, input);
     const event = structuredClone(input);
     event.contentHash = await hash(event);
-    const existing = await listVerifiedEvents(verifiedIdentity);
-    const duplicate = existing.find((candidate) => candidate.eventKey === event.eventKey);
+    const existing = await verifiedEventRecords(verifiedIdentity);
+    const duplicate = existing.find(({ event: candidate }) => candidate.eventKey === event.eventKey);
     if (duplicate) {
-      if (duplicate.contentHash !== event.contentHash) throw new Error("event_key_conflict");
-      const folder = await eventFolder(verifiedIdentity, false);
-      const file = (await drive.listJson(folder.id)).find((candidate) => candidate.name === `event-${duplicate.eventId}.json`);
-      return { event: duplicate, receipt: { fileId: file.id, eventId: duplicate.eventId, eventKey: duplicate.eventKey } };
+      if (duplicate.event.contentHash !== event.contentHash) throw new Error("event_key_conflict");
+      return { event: duplicate.event, receipt: { fileId: duplicate.file.id, eventId: duplicate.event.eventId, eventKey: duplicate.event.eventKey } };
     }
     const folder = await eventFolder(verifiedIdentity, true);
     if ((await drive.listJson(folder.id)).some((file) => file.name === `event-${event.eventId}.json`)) throw new Error("event_id_conflict");

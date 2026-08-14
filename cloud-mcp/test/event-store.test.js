@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createEventStore } from "../src/event-store.js";
+import { canonicalHash, createEventStore } from "../src/event-store.js";
 
 const identity = { userId: "00000000-0000-4000-8000-000000000001", username: "Ada" };
 const event = {
@@ -20,6 +20,7 @@ function fakeDrive() {
   const folders = new Map([["users", { id: "users", name: "users", parents: ["root"] }]]);
   const files = new Map();
   const createdJsonFiles = [];
+  let listings = [];
   let number = 0;
   const childFolders = (parentId, name) => [...folders.values()].filter((folder) => folder.parents[0] === parentId && (!name || folder.name === name));
   return {
@@ -37,7 +38,11 @@ function fakeDrive() {
       const children = foldersOnly ? [...folders.values()] : [...folders.values(), ...files.values()];
       return children.filter((item) => item.parents[0] === parentId && (!name || item.name === name));
     },
-    async listJson(parentId) { return [...files.values()].filter((file) => file.parents[0] === parentId); },
+    setJsonListings(value) { listings = value; },
+    async listJson(parentId) {
+      const listing = listings.shift();
+      return listing ? listing.map((id) => structuredClone(files.get(id))) : [...files.values()].filter((file) => file.parents[0] === parentId);
+    },
     async createJson(parentId, name, value) {
       const file = { id: `file-${++number}`, name, parents: [parentId], mimeType: "application/json", value: structuredClone(value) };
       files.set(file.id, file);
@@ -73,4 +78,17 @@ test("append stores a verified hash under an event-id filename", async () => {
   const result = await store.appendEvent(identity, event);
   assert.equal(drive.createdJsonFiles[0].name, `event-${event.eventId}.json`);
   assert.match(result.event.contentHash, /^[0-9a-f]{64}$/);
+});
+
+test("canonical hash treats event fields named like Drive metadata as content", async () => {
+  assert.notEqual(await canonicalHash(event), await canonicalHash({ ...event, name: "user-supplied-name" }));
+});
+
+test("duplicate retry returns the previously verified file instead of another same-name file", async () => {
+  const { drive, store } = setup();
+  const first = await store.appendEvent(identity, event);
+  const duplicate = await drive.createJson(drive.createdJsonFiles[0].parents[0], `event-${event.eventId}.json`, first.event);
+  drive.setJsonListings([[first.receipt.fileId, duplicate.id], [duplicate.id, first.receipt.fileId]]);
+  const retried = await store.appendEvent(identity, structuredClone(event));
+  assert.equal(retried.receipt.fileId, first.receipt.fileId);
 });
