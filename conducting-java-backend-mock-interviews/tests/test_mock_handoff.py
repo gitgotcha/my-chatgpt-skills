@@ -81,6 +81,20 @@ class MockHandoffTests(unittest.TestCase):
                 session_id=SESSION_ID,
             )
 
+    def test_completed_session_requires_immutable_source_evidence(self) -> None:
+        question = _question(1)
+        for field in ("originalQuestion", "originalAnswer", "followUps", "timeline"):
+            incomplete = dict(question)
+            incomplete.pop(field)
+            with self.subTest(field=field), self.assertRaisesRegex(HandoffValidationError, "question missing"):
+                create_mock_session_event(
+                    _identity(), [incomplete],
+                    started_at="2026-08-14T00:00:00Z",
+                    completed_at="2026-08-14T00:30:00Z",
+                    event_id=EVENT_ID,
+                    session_id=SESSION_ID,
+                )
+
     def test_session_id_rejects_path_separators(self) -> None:
         with self.assertRaisesRegex(HandoffValidationError, "sessionId"):
             create_mock_session_event(
@@ -124,4 +138,3 @@ class MockHandoffTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(saved["persistenceStatus"], "cloud_persistence_pending")
             self.assertNotIn("driveReceipt", saved)
-

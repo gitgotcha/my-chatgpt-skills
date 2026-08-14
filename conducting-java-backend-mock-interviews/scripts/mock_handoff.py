@@ -64,7 +64,10 @@ def _normalize_questions(questions: list[dict[str, object]]) -> list[dict[str, o
     for question in questions:
         if not isinstance(question, dict):
             raise HandoffValidationError("each question must be an object")
-        required = {"questionId", "domain", "sourceTags", "topicTags"}
+        required = {
+            "questionId", "domain", "sourceTags", "topicTags",
+            "originalQuestion", "originalAnswer", "followUps", "timeline",
+        }
         if not required.issubset(question):
             missing = ", ".join(sorted(required - set(question)))
             raise HandoffValidationError(f"question missing: {missing}")
@@ -76,6 +79,14 @@ def _normalize_questions(questions: list[dict[str, object]]) -> list[dict[str, o
             raise HandoffValidationError("sourceTags must be a list of strings")
         if not isinstance(question["topicTags"], list) or not all(isinstance(tag, str) for tag in question["topicTags"]):
             raise HandoffValidationError("topicTags must be a list of strings")
+        if not isinstance(question["originalQuestion"], str) or not question["originalQuestion"].strip():
+            raise HandoffValidationError("originalQuestion must be a non-empty string")
+        if not isinstance(question["originalAnswer"], str):
+            raise HandoffValidationError("originalAnswer must be a string")
+        if not isinstance(question["followUps"], list) or not all(isinstance(item, dict) for item in question["followUps"]):
+            raise HandoffValidationError("followUps must be a list of objects")
+        if not isinstance(question["timeline"], list) or not all(isinstance(item, dict) for item in question["timeline"]):
+            raise HandoffValidationError("timeline must be a list of objects")
         tags = {tag.lower() for tag in question["sourceTags"]}
         if tags.intersection({"profileweakness", "profile_weakness", "weakness", "historyweakness"}):
             weakness_retests += 1
