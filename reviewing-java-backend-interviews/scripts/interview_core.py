@@ -56,8 +56,13 @@ def _require_identity(identity: dict[str, object]) -> tuple[str, str]:
 def _require_iso(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ReviewValidationError(f"{field} must be an ISO-8601 string")
+    # Cloud event timestamps must be unambiguous instants, never local/naive time.
+    if not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", value):
+        raise ReviewValidationError(f"{field} must include a timezone offset")
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("timezone required")
     except ValueError as error:
         raise ReviewValidationError(f"{field} must be an ISO-8601 string") from error
     return value
@@ -105,7 +110,7 @@ def create_review_event(
     """Build one immutable schema-1.2 ``interview.review.completed`` event."""
     user_id, username = _require_identity(identity)
     session_id, source_type, domain, source_questions = _require_session(session, user_id, username)
-    if not isinstance(review_version, int) or review_version < 1:
+    if type(review_version) is not int or review_version < 1:
         raise ReviewValidationError("reviewVersion must be a positive integer")
     if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
         raise ReviewValidationError("eventId must be a UUID")

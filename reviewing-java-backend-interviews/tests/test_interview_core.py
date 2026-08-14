@@ -131,6 +131,21 @@ class ReviewEventContractTests(unittest.TestCase):
                 **{key: value for key, value in common.items() if key not in {"identity", "session", "profile_changes"}},
             )
 
+    def test_review_rejects_boolean_versions_and_naive_timestamps(self) -> None:
+        args = {
+            "identity": _review_identity(),
+            "session": _review_session(),
+            "question_reviews": [],
+            "profile_changes": [],
+            "recommendations": [],
+            "apply_profile_changes": False,
+            "event_id": REVIEW_EVENT_ID,
+        }
+        with self.assertRaisesRegex(ReviewValidationError, "reviewVersion"):
+            create_review_event(**args, review_version=True, completed_at="2026-08-14T01:00:00Z")
+        with self.assertRaisesRegex(ReviewValidationError, "timezone"):
+            create_review_event(**args, review_version=1, completed_at="2026-08-14T01:00:00")
+
 
 class ArtifactValidationTests(unittest.TestCase):
     def test_candidate_context_requires_explicit_confirmation(self) -> None:
