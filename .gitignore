@@ -1,3 +1,6 @@
 cloud-mcp/.dev.vars
 cloud-mcp/.wrangler/
 cloud-mcp/node_modules/
+
+**/__pycache__/
+*.pyc

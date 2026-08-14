@@ -19,15 +19,21 @@ class SharedSchemaTests(unittest.TestCase):
         })
         self.assertEqual(contract["$defs"]["SessionEvent"]["properties"]["schemaVersion"]["const"], "1.2")
 
-    def test_mock_skill_uses_identity_gate_and_one_submit_event(self) -> None:
-        skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("submit_event", skill)
-        self.assertIn("identity.list", skill)
-        self.assertIn("identity.verify", skill)
-        self.assertIn("identity.create", skill)
-        for removed in (
-            "find_or_create_candidate", "list_candidates", "get_candidate_context",
-            "read_artifact", "submit_artifact", "contentBase64", "raw_transcript.md",
-        ):
-            self.assertNotIn(removed, skill)
-
+    def test_all_interview_skills_use_identity_gate_and_one_submit_event(self) -> None:
+        skill_root = Path(__file__).resolve().parents[1]
+        skills = [
+            skill_root.parent / "algorithm-learning" / "SKILL.md",
+            skill_root / "SKILL.md",
+            skill_root.parent / "reviewing-java-backend-interviews" / "SKILL.md",
+        ]
+        for skill_path in skills:
+            skill = skill_path.read_text(encoding="utf-8")
+            self.assertIn("submit_event", skill, skill_path.as_posix())
+            self.assertIn("identity.list", skill, skill_path.as_posix())
+            self.assertIn("identity.verify", skill, skill_path.as_posix())
+            self.assertIn("identity.create", skill, skill_path.as_posix())
+            for removed in (
+                "find_or_create_candidate", "list_candidates", "get_candidate_context",
+                "read_artifact", "submit_artifact", "contentBase64", "raw_transcript.md",
+            ):
+                self.assertNotIn(removed, skill, f"{removed} in {skill_path}")

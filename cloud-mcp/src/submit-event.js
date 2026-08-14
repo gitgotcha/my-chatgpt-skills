@@ -19,15 +19,24 @@ export async function dispatchSubmitEvent(env, args, deps) {
     }
     return eventStores.get(namespace);
   };
-  const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview") });
+  const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview"), drive });
   const identity = (payload) => ({ userId: payload.userId, username: payload.username });
   const handlers = {
     "identity.list": (_env, { namespace }) => namespaceStore(namespace).listIdentities(),
     "identity.create": (_env, { namespace, payload }) => namespaceStore(namespace).createIdentity(payload),
     "identity.verify": (_env, { namespace, payload }) => namespaceStore(namespace).verifyIdentity(payload),
-    "interview.session.list": (_env, { payload }) => interviewStore().listSessions(identity(payload)),
-    "interview.session.load": (_env, { payload }) => interviewStore().loadSession(identity(payload), payload.sessionId),
-    "interview.session.completed": (_env, { payload }) => interviewStore().submitSession(identity(payload), payload.event),
+    "interview.session.list": async (_env, { payload }) => ({
+      status: "ok",
+      data: { sessions: await interviewStore().listSessions(identity(payload)) }
+    }),
+    "interview.session.load": async (_env, { payload }) => ({
+      status: "ok",
+      data: await interviewStore().loadSession(identity(payload), payload.sessionId)
+    }),
+    "interview.session.completed": async (_env, { payload }) => {
+      const result = await interviewStore().submitSession(identity(payload), payload.event);
+      return { status: "ok", ...result };
+    },
     "interview.review.completed": (_env, { payload }) => interviewStore().submitReview(identity(payload), payload.event),
     "algorithm.learning.completed": (_env, { namespace, identity: boundIdentity, payload }) => {
       if (!payload?.event || payload.event.eventType !== "algorithm.learning.completed") throw new ProtocolError("invalid_event");
