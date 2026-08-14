@@ -59,7 +59,7 @@ def _require_iso(value: object, field: str) -> str:
     return value
 
 
-def _require_session(session: dict[str, object], user_id: str, username: str) -> tuple[str, str, list[dict[str, object]]]:
+def _require_session(session: dict[str, object], user_id: str, username: str) -> tuple[str, str, str, list[dict[str, object]]]:
     if not isinstance(session, dict) or session.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
         raise ReviewValidationError("session must use schemaVersion 1.2")
     if session.get("eventType") != "interview.session.completed":
@@ -78,7 +78,10 @@ def _require_session(session: dict[str, object], user_id: str, username: str) ->
     event_id = session.get("eventId")
     if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
         raise ReviewValidationError("source session eventId must be a UUID")
-    return session_id, source_type, questions
+    domain = session.get("domain")
+    if not isinstance(domain, str) or not domain.strip():
+        raise ReviewValidationError("session domain must be a non-empty string")
+    return session_id, source_type, domain.strip(), questions
 
 
 def create_review_event(
@@ -97,7 +100,7 @@ def create_review_event(
 ) -> dict[str, object]:
     """Build one immutable schema-1.2 ``interview.review.completed`` event."""
     user_id, username = _require_identity(identity)
-    session_id, source_type, source_questions = _require_session(session, user_id, username)
+    session_id, source_type, domain, source_questions = _require_session(session, user_id, username)
     if not isinstance(review_version, int) or review_version < 1:
         raise ReviewValidationError("reviewVersion must be a positive integer")
     if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
@@ -117,9 +120,24 @@ def create_review_event(
             raise ReviewValidationError("questionReviews must reference source question IDs")
         if question_id in seen_ids:
             raise ReviewValidationError("questionReviews cannot contain duplicate question IDs")
+        if not isinstance(item.get("assessment"), str):
+            raise ReviewValidationError("questionReviews require assessment")
+        if not isinstance(item.get("evidence"), dict):
+            raise ReviewValidationError("questionReviews require evidence")
+        item_recommendations = item.get("recommendations")
+        if not isinstance(item_recommendations, list) or not all(
+            isinstance(value, str) and value.strip() for value in item_recommendations
+        ):
+            raise ReviewValidationError("questionReviews require recommendations")
         seen_ids.add(question_id)
     if not isinstance(profile_changes, list) or not all(isinstance(item, dict) for item in profile_changes):
         raise ReviewValidationError("profileChanges must be a list of objects")
+    valid_outcomes = {"failed", "passed", "observed", "improving", "closed"}
+    for change in profile_changes:
+        if not isinstance(change.get("kind"), str) or not str(change["kind"]).strip():
+            raise ReviewValidationError("profileChanges require kind")
+        if change.get("outcome") not in valid_outcomes:
+            raise ReviewValidationError("profileChanges require a supported outcome")
     if not isinstance(recommendations, list) or not all(isinstance(item, str) and item.strip() for item in recommendations):
         raise ReviewValidationError("recommendations must be a list of non-empty strings")
     if source_type == "mock":
@@ -138,6 +156,8 @@ def create_review_event(
         "userId": user_id,
         "username": username,
         "sessionId": session_id,
+        "interviewType": source_type,
+        "domain": domain,
         "reviewVersion": review_version,
         "sourceSessionEventId": session["eventId"],
         "sourceType": source_type,
