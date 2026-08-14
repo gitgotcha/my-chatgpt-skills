@@ -49,3 +49,39 @@ test("loadSession rejects malformed session ids", async () => {
 test("submitSession rejects path-like session identifiers", async () => {
   await assert.rejects(() => setup().submitSession(identity, { ...session, sessionId: "../x" }), /invalid_session_id/);
 });
+
+test("submitReview preserves the verified receipt when snapshot creation fails", async () => {
+  const reviewEvent = {
+    ...session,
+    eventId: "10000000-0000-4000-8000-000000000010",
+    eventKey: `${identity.userId}:interview:review:MOCK-1:v1`,
+    eventType: "interview.review.completed",
+    reviewVersion: 1,
+    sourceSessionEventId: session.eventId,
+    applyProfileChanges: true,
+    profileChanges: []
+  };
+  const eventStore = {
+    appendEvent: async (_requestedIdentity, value) => ({ event: value, receipt: { fileId: "review-file", eventKey: value.eventKey, eventId: value.eventId } }),
+    listVerifiedEvents: async () => [session, reviewEvent]
+  };
+  const result = await createInterviewStore({ eventStore }).submitReview(identity, reviewEvent, {
+    createSnapshot: async () => { throw new Error("Drive unavailable"); }
+  });
+  assert.equal(result.status, "profile_cache_pending");
+  assert.equal(result.receipt.eventKey, reviewEvent.eventKey);
+});
+
+test("submitReview requires a versioned event key matching reviewVersion", async () => {
+  const eventStore = {
+    appendEvent: async (_requestedIdentity, value) => ({ event: value, receipt: { fileId: "review-file", eventKey: value.eventKey, eventId: value.eventId } }),
+    listVerifiedEvents: async () => [session]
+  };
+  const store = createInterviewStore({ eventStore });
+  const base = {
+    ...session, eventId: "10000000-0000-4000-8000-000000000011", eventType: "interview.review.completed",
+    reviewVersion: 1, sourceSessionEventId: session.eventId, applyProfileChanges: true, profileChanges: []
+  };
+  await assert.rejects(() => store.submitReview(identity, { ...base, eventKey: "review-without-version" }), /invalid_review_version/);
+  await assert.rejects(() => store.submitReview(identity, { ...base, eventKey: "review:v2" }), /invalid_review_version/);
+});

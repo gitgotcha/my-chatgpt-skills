@@ -23,7 +23,7 @@ export async function dispatchSubmitEvent(env, args, deps) {
     "interview.session.list": (_env, { payload }) => interviewStore.listSessions(identity(payload)),
     "interview.session.load": (_env, { payload }) => interviewStore.loadSession(identity(payload), payload.sessionId),
     "interview.session.completed": (_env, { payload }) => interviewStore.submitSession(identity(payload), payload.event),
-    "interview.review.completed": (_env, { payload }) => interviewStore.submitSession(identity(payload), payload.event)
+    "interview.review.completed": (_env, { payload }) => interviewStore.submitReview(identity(payload), payload.event)
   };
   const handler = deps.handlers?.[envelope.eventType] ?? handlers[envelope.eventType];
   if (typeof handler !== "function") {
