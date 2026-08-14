@@ -18,6 +18,8 @@ test("MCP exposes only submit_event", async () => {
   const response = await handleRequest(request("tools/list"), env());
   const payload = await response.json();
   assert.deepEqual(payload.result.tools.map((tool) => tool.name), ["submit_event"]);
+  assert.equal(payload.result.tools[0].inputSchema.additionalProperties, false);
+  assert.equal(payload.result.tools[0].inputSchema.properties.payload.additionalProperties, false);
 });
 
 test("MCP rejects an incorrect bearer token", async () => {
@@ -66,6 +68,41 @@ test("submit_event rejects an allowed event without a registered handler", async
   assert.match(payload.error.message, /invalid_event_type/);
 });
 
+test("submit_event rejects unknown top-level envelope fields", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "algorithm",
+      eventType: "identity.list",
+      payload: {},
+      requestId: "00000000-0000-4000-8000-000000000004",
+      folderId: "drive-folder"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_envelope/);
+});
+
+for (const field of ["folderId", "path", "mimeType", "contentBase64", "markdown", "docx"]) {
+  test(`submit_event rejects the ${field} payload control field`, async () => {
+    const response = await handleRequest(request("tools/call", {
+      name: "submit_event",
+      arguments: {
+        schemaVersion: "1.2",
+        namespace: "algorithm",
+        eventType: "identity.list",
+        payload: { [field]: "untrusted-content" },
+        requestId: "00000000-0000-4000-8000-000000000005"
+      }
+    }), env());
+    const payload = await response.json();
+    assert.equal(payload.error.code, -32602);
+    assert.match(payload.error.message, /invalid_payload/);
+  });
+}
+
 test("submit_event dispatches the validated envelope to its event handler", async () => {
   const response = await handleRequest(request("tools/call", {
     name: "submit_event",
@@ -73,7 +110,7 @@ test("submit_event dispatches the validated envelope to its event handler", asyn
       schemaVersion: "1.2",
       namespace: "algorithm",
       eventType: "identity.list",
-      payload: { page: 1 },
+      payload: {},
       requestId: "00000000-0000-4000-8000-000000000003"
     }
   }), env(), {
@@ -87,7 +124,7 @@ test("submit_event dispatches the validated envelope to its event handler", asyn
       schemaVersion: "1.2",
       namespace: "algorithm",
       eventType: "identity.list",
-      payload: { page: 1 },
+      payload: {},
       requestId: "00000000-0000-4000-8000-000000000003"
     }
   });

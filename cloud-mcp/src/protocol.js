@@ -10,6 +10,7 @@ export const ALLOWED_EVENT_TYPES = new Set([
   "interview.session.completed",
   "interview.review.completed"
 ]);
+const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "payload", "requestId"]);
 
 export class ProtocolError extends Error {
   constructor(status, message = status) {
@@ -22,6 +23,9 @@ export function validateEnvelope(input) {
   if (!input || input.schemaVersion !== SCHEMA_VERSION) {
     throw new ProtocolError("invalid_schema_version");
   }
+  if (Object.keys(input).some((field) => !ALLOWED_ENVELOPE_FIELDS.has(field))) {
+    throw new ProtocolError("invalid_envelope");
+  }
   if (!ALLOWED_NAMESPACES.has(input.namespace)) {
     throw new ProtocolError("invalid_namespace");
   }
@@ -32,6 +36,9 @@ export function validateEnvelope(input) {
     throw new ProtocolError("invalid_request_id");
   }
   if (input.payload !== undefined && (input.payload === null || Array.isArray(input.payload) || typeof input.payload !== "object")) {
+    throw new ProtocolError("invalid_payload");
+  }
+  if (input.payload && Object.keys(input.payload).length) {
     throw new ProtocolError("invalid_payload");
   }
   return structuredClone(input);

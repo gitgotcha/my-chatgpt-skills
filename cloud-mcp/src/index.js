@@ -6,12 +6,13 @@ const tools = [{
   description: "Submit a validated interview or algorithm event.",
   inputSchema: {
     type: "object",
+    additionalProperties: false,
     required: ["schemaVersion", "namespace", "eventType", "requestId"],
     properties: {
       schemaVersion: { type: "string" },
       namespace: { type: "string" },
       eventType: { type: "string" },
-      payload: { type: "object" },
+      payload: { type: "object", additionalProperties: false },
       requestId: { type: "string" }
     }
   }
