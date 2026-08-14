@@ -72,67 +72,74 @@ async function googleGet(env, url, fetchImpl = fetch, options = {}) {
   return response;
 }
 
-async function listFoldersFromDrive(env, deps = {}) {
-  const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch, { list: true });
-  const payload = await response.json();
-  return payload.files ?? [];
-}
-
 const escapeDriveQuery = (value) => value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
 
-async function findFoldersByNameFromDrive(env, displayName, deps = {}) {
-  const query = encodeURIComponent(`'${env.GOOGLE_DRIVE_FOLDER_ID}' in parents and name = '${escapeDriveQuery(displayName)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-  const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(id,name,createdTime)`, deps.fetch ?? fetch, { list: true });
-  const payload = await response.json();
-  return payload.files ?? [];
-}
+const driveFields = "id,name,mimeType,parents,createdTime";
 
-export async function uploadDriveFile(env, parentId, name, content, mimeType, deps = {}) {
-  const uploadFile = deps.uploadFile ?? ((...args) => googleUpload(env, ...args, deps.fetch ?? fetch));
-  const file = await uploadFile(parentId, name, content, mimeType);
-  if (!file?.id) throw new Error("Google Drive write failed: missing file id");
-  return file;
-}
+const requiredParentId = (parentId) => {
+  if (!parentId) throw new Error("parentId is required");
+  return parentId;
+};
 
-export async function findOrCreateCandidateFolder(env, input, deps = {}) {
-  const displayName = input?.displayName?.trim();
-  if (!displayName) throw new Error("displayName is required");
-  const findFoldersByName = deps.findFoldersByName ?? ((name) => findFoldersByNameFromDrive(env, name, deps));
-  const matches = await findFoldersByName(displayName);
-  const existing = [...matches].sort((left, right) => String(left.createdTime ?? "").localeCompare(String(right.createdTime ?? "")))[0];
-  if (existing?.id) return { displayName, folderId: existing.id, created: false };
-  const createdAt = (deps.now ?? (() => new Date().toISOString()))();
-  const createFolder = deps.createFolder ?? ((parentId, name) => googleUpload(env, parentId, name, "", "application/vnd.google-apps.folder", deps.fetch ?? fetch));
-  const folder = await createFolder(env.GOOGLE_DRIVE_FOLDER_ID, displayName);
-  if (!folder?.id) throw new Error("Google Drive write failed: missing folder id");
-  await uploadDriveFile(env, folder.id, "identity.json", JSON.stringify({ schemaVersion: "1.0", displayName, createdAt }), "application/json", deps);
-  return { displayName, folderId: folder.id, created: true };
-}
+export function createDriveRepository(env, deps = {}) {
+  const fetchImpl = deps.fetch ?? fetch;
+  const createFolderImpl = deps.createFolder ?? ((parentId, name) =>
+    googleUpload(env, parentId, name, "", "application/vnd.google-apps.folder", fetchImpl));
+  const uploadFileImpl = deps.uploadFile ?? ((parentId, name, content, mimeType) =>
+    googleUpload(env, parentId, name, content, mimeType, fetchImpl));
+  const listChildrenImpl = deps.listChildren ?? (async (parentId, options = {}) => {
+    const clauses = [`'${escapeDriveQuery(requiredParentId(parentId))}' in parents`, "trashed = false"];
+    if (options.name) clauses.push(`name = '${escapeDriveQuery(options.name)}'`);
+    if (options.foldersOnly) clauses.push("mimeType = 'application/vnd.google-apps.folder'");
+    if (options.jsonOnly) clauses.push("mimeType = 'application/json'");
+    const query = encodeURIComponent(clauses.join(" and "));
+    const response = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime&fields=files(${driveFields})`, fetchImpl, { list: true });
+    const payload = await response.json();
+    return payload.files ?? [];
+  });
+  const readJsonFileImpl = deps.readJsonFile ?? (async (fileId) => {
+    const id = requiredParentId(fileId);
+    const metadataResponse = await googleGet(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${driveFields}`, fetchImpl);
+    const metadata = await metadataResponse.json();
+    if (!metadata?.id) throw new Error("Google Drive read failed: missing file id");
+    const contentResponse = await googleGet(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, fetchImpl);
+    return { ...metadata, value: JSON.parse(await contentResponse.text()) };
+  });
 
-export async function listCandidates(env, input = {}, deps = {}) {
-  const listFolders = deps.listFolders ?? (() => listFoldersFromDrive(env, deps));
-  const query = input.query?.trim().toLowerCase() ?? "";
-  const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 100);
-  const folders = await listFolders();
-  return folders
-    .filter((folder) => !query || folder.name.toLowerCase().includes(query))
-    .slice(0, limit)
-    .map((folder) => ({ displayName: folder.name, folderId: folder.id }));
-}
-
-export async function getCandidateContext(env, input, deps = {}) {
-  const candidate = await findOrCreateCandidateFolder(env, input, deps);
-  return { ...candidate, selectedDomain: input.selectedDomain ?? null, activeResumeId: input.resumeId ?? null, artifacts: [] };
-}
-
-export async function readArtifact(env, input, deps = {}) {
-  const candidate = await findOrCreateCandidateFolder(env, input, deps);
-  const query = encodeURIComponent(`'${candidate.folderId}' in parents and name = '${escapeDriveQuery(input.artifactKey)}' and trashed = false`);
-  const list = await googleGet(env, `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)`, deps.fetch ?? fetch, { list: true });
-  const payload = await list.json();
-  const file = payload.files?.[0];
-  if (!file?.id) throw new Error("Artifact not found in Google Drive");
-  const content = await googleGet(env, `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, deps.fetch ?? fetch);
-  return { fileId: file.id, fileName: file.name, contentType: file.mimeType, content: await content.text() };
+  return {
+    rootFolderId: env.GOOGLE_DRIVE_FOLDER_ID,
+    async listChildren(parentId, options = {}) {
+      requiredParentId(parentId);
+      return listChildrenImpl(parentId, options);
+    },
+    async findFolder(parentId, name) {
+      if (!name) throw new Error("folder name is required");
+      const matches = await this.listChildren(parentId, { name, foldersOnly: true });
+      return matches[0] ?? null;
+    },
+    async ensureFolder(parentId, name) {
+      if (!parentId || !name || name.includes("/") || name.includes("\\")) throw new Error("invalid folder input");
+      const existing = await this.findFolder(parentId, name);
+      if (existing) return existing;
+      const created = await createFolderImpl(parentId, name);
+      if (!created?.id) throw new Error("Google Drive write failed: missing folder id");
+      return { ...created, name, parents: [parentId] };
+    },
+    async createJson(parentId, name, value) {
+      if (!parentId) throw new Error("parentId is required");
+      if (!/^((identity)|(registration-[0-9a-f-]+)|(event-[0-9a-f-]+)|(snapshot-[0-9TZ:.-]+-[0-9a-f-]+))\.json$/i.test(name)) {
+        throw new Error("invalid JSON target");
+      }
+      const file = await uploadFileImpl(parentId, name, JSON.stringify(value), "application/json");
+      if (!file?.id) throw new Error("Google Drive write failed: missing file id");
+      return this.readJson(file.id);
+    },
+    async readJson(fileId) {
+      return readJsonFileImpl(fileId);
+    },
+    async listJson(parentId) {
+      const children = await this.listChildren(parentId, { jsonOnly: true });
+      return children.filter((file) => file.mimeType === "application/json");
+    }
+  };
 }
