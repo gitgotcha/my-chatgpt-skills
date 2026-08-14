@@ -14,12 +14,10 @@ function request(method, params, token = "secret") {
   });
 }
 
-const candidate = { displayName: "小明", folderId: "folder-1", created: false };
-
-test("MCP tools/list exposes the name-folder entrypoint", async () => {
+test("MCP exposes only submit_event", async () => {
   const response = await handleRequest(request("tools/list"), env());
   const payload = await response.json();
-  assert.equal(payload.result.tools.some((tool) => tool.name === "find_or_create_candidate"), true);
+  assert.deepEqual(payload.result.tools.map((tool) => tool.name), ["submit_event"]);
 });
 
 test("MCP rejects an incorrect bearer token", async () => {
@@ -27,52 +25,70 @@ test("MCP rejects an incorrect bearer token", async () => {
   assert.equal(response.status, 401);
 });
 
-test("MCP finds or creates a user from displayName", async () => {
-  const response = await handleRequest(request("tools/call", { name: "find_or_create_candidate", arguments: { displayName: "小明" } }), env(), {
-    drive: { findOrCreateCandidateFolder: async () => candidate }
+test("MCP rejects removed tools", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "find_or_create_candidate",
+    arguments: { displayName: "旧用户" }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32601);
+});
+
+test("submit_event rejects a path-like namespace", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "../interview",
+      eventType: "identity.list",
+      payload: {},
+      requestId: "00000000-0000-4000-8000-000000000001"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_namespace/);
+});
+
+test("submit_event rejects an allowed event without a registered handler", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "interview",
+      eventType: "interview.session.load",
+      payload: {},
+      requestId: "00000000-0000-4000-8000-000000000002"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_event_type/);
+});
+
+test("submit_event dispatches the validated envelope to its event handler", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "algorithm",
+      eventType: "identity.list",
+      payload: { page: 1 },
+      requestId: "00000000-0000-4000-8000-000000000003"
+    }
+  }), env(), {
+    handlers: {
+      "identity.list": async (_env, envelope) => ({ received: envelope })
+    }
   });
   const payload = await response.json();
-  assert.match(payload.result.content[0].text, /folder-1/);
-});
-
-test("MCP submit_artifact resolves a name to its Drive folder", async () => {
-  let parentId;
-  const response = await handleRequest(request("tools/call", { name: "submit_artifact", arguments: {
-    displayName: "小明", fileName: "session.json", contentBase64: btoa("{}"), contentType: "application/json"
-  } }), env(), { drive: {
-    findOrCreateCandidateFolder: async () => candidate,
-    uploadDriveFile: async (_env, parent, name) => { parentId = parent; assert.equal(name, "session.json"); return { id: "file-1" }; }
-  } });
-  const payload = await response.json();
-  assert.equal(parentId, "folder-1");
-  assert.match(payload.result.content[0].text, /file-1/);
-});
-
-test("MCP submit_event resolves a name to its Drive folder", async () => {
-  let parentId;
-  const response = await handleRequest(request("tools/call", { name: "submit_event", arguments: {
-    displayName: "小明", event: { eventKey: "EVT-1" }
-  } }), env(), { drive: {
-    findOrCreateCandidateFolder: async () => candidate,
-    uploadDriveFile: async (_env, parent) => { parentId = parent; return { id: "event-file-1" }; }
-  } });
-  const payload = await response.json();
-  assert.equal(parentId, "folder-1");
-  assert.match(payload.result.content[0].text, /event-file-1/);
-});
-
-test("MCP get_candidate_context resolves displayName", async () => {
-  const response = await handleRequest(request("tools/call", { name: "get_candidate_context", arguments: { displayName: "小明" } }), env(), {
-    drive: { getCandidateContext: async () => ({ ...candidate, artifacts: [] }) }
+  assert.deepEqual(JSON.parse(payload.result.content[0].text), {
+    received: {
+      schemaVersion: "1.2",
+      namespace: "algorithm",
+      eventType: "identity.list",
+      payload: { page: 1 },
+      requestId: "00000000-0000-4000-8000-000000000003"
+    }
   });
-  const payload = await response.json();
-  assert.match(payload.result.content[0].text, /folder-1/);
-});
-
-test("MCP read_artifact resolves displayName", async () => {
-  const response = await handleRequest(request("tools/call", { name: "read_artifact", arguments: { displayName: "小明", artifactKey: "session" } }), env(), {
-    drive: { readArtifact: async () => ({ fileId: "file-1", content: "{}" }) }
-  });
-  const payload = await response.json();
-  assert.match(payload.result.content[0].text, /file-1/);
 });
