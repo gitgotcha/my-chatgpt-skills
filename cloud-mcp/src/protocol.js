@@ -11,6 +11,15 @@ export const ALLOWED_EVENT_TYPES = new Set([
   "interview.review.completed"
 ]);
 const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "payload", "requestId"]);
+const PAYLOAD_FIELDS = new Map([
+  ["identity.list", []],
+  ["identity.create", ["username"]],
+  ["identity.verify", ["userId", "username"]],
+  ["interview.session.list", ["userId", "username"]],
+  ["interview.session.load", ["userId", "username", "sessionId"]],
+  ["interview.session.completed", ["userId", "username", "event"]],
+  ["interview.review.completed", ["userId", "username", "event"]]
+]);
 
 export class ProtocolError extends Error {
   constructor(status, message = status) {
@@ -32,13 +41,18 @@ export function validateEnvelope(input) {
   if (!ALLOWED_EVENT_TYPES.has(input.eventType)) {
     throw new ProtocolError("invalid_event_type");
   }
+  if (input.eventType.startsWith("interview.") && input.namespace !== "interview") {
+    throw new ProtocolError("invalid_event_type");
+  }
   if (typeof input.requestId !== "string" || !input.requestId.trim()) {
     throw new ProtocolError("invalid_request_id");
   }
   if (input.payload !== undefined && (input.payload === null || Array.isArray(input.payload) || typeof input.payload !== "object")) {
     throw new ProtocolError("invalid_payload");
   }
-  if (input.payload && Object.keys(input.payload).length) {
+  const allowedPayloadFields = PAYLOAD_FIELDS.get(input.eventType);
+  if (!allowedPayloadFields || Object.keys(input.payload ?? {}).length !== allowedPayloadFields.length
+    || Object.keys(input.payload ?? {}).some((field) => !allowedPayloadFields.includes(field))) {
     throw new ProtocolError("invalid_payload");
   }
   return structuredClone(input);

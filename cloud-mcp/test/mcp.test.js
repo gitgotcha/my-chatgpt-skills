@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { handleRequest } from "../src/index.js";
+import { validateEnvelope } from "../src/protocol.js";
 
 function env() {
   return { MCP_BEARER_TOKEN: "secret", GOOGLE_DRIVE_FOLDER_ID: "root" };
@@ -52,7 +53,7 @@ test("submit_event rejects a path-like namespace", async () => {
   assert.match(payload.error.message, /invalid_namespace/);
 });
 
-test("submit_event rejects an allowed event without a registered handler", async () => {
+test("submit_event rejects an incomplete session payload", async () => {
   const response = await handleRequest(request("tools/call", {
     name: "submit_event",
     arguments: {
@@ -65,7 +66,25 @@ test("submit_event rejects an allowed event without a registered handler", async
   }), env());
   const payload = await response.json();
   assert.equal(payload.error.code, -32602);
-  assert.match(payload.error.message, /invalid_event_type/);
+  assert.match(payload.error.message, /invalid_payload/);
+});
+
+test("protocol accepts the identity-bound payload needed to load an interview session", () => {
+  assert.deepEqual(validateEnvelope({
+    schemaVersion: "1.2",
+    namespace: "interview",
+    eventType: "interview.session.load",
+    payload: { userId: "00000000-0000-4000-8000-000000000001", username: "Ada", sessionId: "MOCK-1" },
+    requestId: "00000000-0000-4000-8000-000000000006"
+  }).payload, { userId: "00000000-0000-4000-8000-000000000001", username: "Ada", sessionId: "MOCK-1" });
+});
+
+test("protocol rejects interview session events in another namespace", () => {
+  assert.throws(() => validateEnvelope({
+    schemaVersion: "1.2", namespace: "algorithm", eventType: "interview.session.list",
+    payload: { userId: "00000000-0000-4000-8000-000000000001", username: "Ada" },
+    requestId: "00000000-0000-4000-8000-000000000007"
+  }), /invalid_event_type/);
 });
 
 test("submit_event rejects unknown top-level envelope fields", async () => {
