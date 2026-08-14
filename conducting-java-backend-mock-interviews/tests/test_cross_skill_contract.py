@@ -15,9 +15,14 @@ class SharedSchemaTests(unittest.TestCase):
         contract = json.loads(conducting_schema.read_text(encoding="utf-8"))
         self.assertEqual(set(contract["$defs"]), {
             "Identity", "Registration", "Question", "SessionEvent",
-            "QuestionReview", "ReviewEvent", "ProfileSnapshot",
+            "QuestionReview", "ProfileChange", "ReviewEvent", "ProfileSnapshot",
         })
         self.assertEqual(contract["$defs"]["SessionEvent"]["properties"]["schemaVersion"]["const"], "1.2")
+        self.assertEqual(contract["$defs"]["ReviewEvent"]["properties"]["schemaVersion"]["const"], "1.2")
+        self.assertEqual(
+            contract["$defs"]["ReviewEvent"]["properties"]["profileChanges"]["items"]["$ref"],
+            "#/$defs/ProfileChange",
+        )
 
     def test_all_interview_skills_use_identity_gate_and_one_submit_event(self) -> None:
         skill_root = Path(__file__).resolve().parents[1]
