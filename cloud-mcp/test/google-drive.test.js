@@ -4,6 +4,63 @@ import { createDriveRepository, formatGoogleDriveWriteError, withSharedDriveSupp
 
 const env = { GOOGLE_DRIVE_FOLDER_ID: "root" };
 
+test("Drive writes use a user OAuth refresh token when configured", async () => {
+  const requests = [];
+  const fetch = async (url, init = {}) => {
+    requests.push({ url, init });
+    if (url === "https://oauth2.googleapis.com/token") {
+      return new Response(JSON.stringify({ access_token: "user-access-token" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ id: "folder-or-file-1", name: "identity.json", mimeType: "application/json" }), { status: 200 });
+  };
+  const repository = createDriveRepository({
+    ...env,
+    GOOGLE_OAUTH_CLIENT_ID: "client-id",
+    GOOGLE_OAUTH_CLIENT_SECRET: "client-secret",
+    GOOGLE_OAUTH_REFRESH_TOKEN: "refresh-token"
+  }, { fetch, readJsonFile: async (id) => ({ id, value: {} }) });
+
+  await repository.createJson("user-folder", "identity.json", { schemaVersion: "1.2" });
+
+  assert.equal(requests[0].url, "https://oauth2.googleapis.com/token");
+  assert.match(requests[0].init.body.toString(), /grant_type=refresh_token/);
+  assert.match(requests[0].init.body.toString(), /client_id=client-id/);
+  assert.match(requests[0].init.body.toString(), /refresh_token=refresh-token/);
+  assert.equal(requests[1].init.headers.authorization, "Bearer user-access-token");
+});
+
+test("incomplete OAuth configuration does not replace service-account authentication", () => {
+  const repository = createDriveRepository({ ...env, GOOGLE_OAUTH_CLIENT_ID: "only-client-id" }, {
+    uploadFile: async () => ({ id: "file-1" }),
+    readJsonFile: async (id) => ({ id, value: {} })
+  });
+  assert.equal(repository.rootFolderId, "root");
+});
+
+test("a repository reuses one OAuth access token across Drive calls", async () => {
+  let tokenRequests = 0;
+  const fetch = async (url) => {
+    if (url === "https://oauth2.googleapis.com/token") {
+      tokenRequests += 1;
+      return new Response(JSON.stringify({ access_token: "user-access-token" }), { status: 200 });
+    }
+    if (url.includes("/upload/drive/v3/files")) {
+      return new Response(JSON.stringify({ id: "file-1", name: "identity.json", mimeType: "application/json" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ files: [], nextPageToken: null }), { status: 200 });
+  };
+  const repository = createDriveRepository({
+    ...env,
+    GOOGLE_OAUTH_CLIENT_ID: "client-id",
+    GOOGLE_OAUTH_CLIENT_SECRET: "client-secret",
+    GOOGLE_OAUTH_REFRESH_TOKEN: "refresh-token"
+  }, { fetch, readJsonFile: async (id) => ({ id, value: {} }) });
+
+  await repository.createJson("user-folder", "identity.json", { schemaVersion: "1.2" });
+  await repository.listJson("user-folder");
+  assert.equal(tokenRequests, 1);
+});
+
 test("formatGoogleDriveWriteError preserves Drive status and message", () => {
   assert.equal(
     formatGoogleDriveWriteError(403, { error: { message: "The caller does not have permission" } }),
