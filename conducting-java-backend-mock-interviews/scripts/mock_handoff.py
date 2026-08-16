@@ -1,98 +1,167 @@
-"""Candidate-locked mock-session creation and review handoff sealing."""
+"""Deterministic construction of schema-1.2 mock-interview events.
+
+The conversational skill owns the interview itself.  This module only seals
+the verified identity, preserves the original question evidence, and writes a
+portable local JSON copy after the single ``submit_event`` call.
+"""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
-from hashlib import sha256
+from datetime import datetime
+import json
+from pathlib import Path
+import re
+from typing import Any
+
+
+SCHEMA_VERSION = "1.2"
+_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_SESSION_ID = re.compile(r"^(?:MOCK|REAL)-[^/\\]+$")
 
 
 class HandoffValidationError(ValueError):
-    """Raised when an unconfirmed or inconsistent mock artifact is supplied."""
+    """Raised when an event is not safe to submit or persist locally."""
 
 
-def _assert_context(context: dict[str, object]) -> None:
-    required = {
-        "candidate_id", "display_name", "confirmed_by_user", "confirmed_at",
-        "active_resume_id", "selected_domain",
-    }
-    if not required.issubset(context) or context.get("confirmed_by_user") is not True:
-        raise HandoffValidationError("a complete explicitly confirmed context is required")
-    candidate_id = context.get("candidate_id")
-    if not isinstance(candidate_id, str) or not candidate_id.startswith(("CAND-", "TEST-")):
-        raise HandoffValidationError("candidate_id must be stable and confirmed")
+def _assert_verified_identity(identity: dict[str, object]) -> None:
+    if not isinstance(identity, dict) or identity.get("verified") is not True:
+        raise HandoffValidationError("verified identity is required")
+    user_id = identity.get("userId")
+    username = identity.get("username")
+    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
+        raise HandoffValidationError("verified identity requires a UUID userId")
+    if not isinstance(username, str) or not username.strip():
+        raise HandoffValidationError("verified identity requires a username")
 
 
-def lock_resume(context: dict[str, object], resume_id: str | None) -> dict[str, object]:
-    """Return a new confirmed context with one resume version locked for the session."""
-    _assert_context(context)
-    if resume_id is not None and not resume_id.startswith("RES-"):
-        raise HandoffValidationError("resume_id must use the RES- prefix")
-    locked = deepcopy(context)
-    locked["active_resume_id"] = resume_id
-    return locked
+def _assert_timestamp(value: object, field: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise HandoffValidationError(f"{field} must be an ISO-8601 string")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HandoffValidationError(f"{field} must be an ISO-8601 string") from exc
 
 
-def _selected_domain(context: dict[str, object]) -> str:
-    selected = context.get("selected_domain")
-    if isinstance(selected, str) and selected:
-        return selected
-    detected = list(dict.fromkeys(context.get("detected_domains", [])))
-    if len(detected) > 1:
-        raise HandoffValidationError("mixed domains require an explicit user selection")
-    return detected[0] if detected else "java_backend"
+def _selected_domain(questions: list[dict[str, object]]) -> str:
+    domains = list(dict.fromkeys(
+        str(question.get("domain", "")).strip()
+        for question in questions
+        if str(question.get("domain", "")).strip()
+    ))
+    return domains[0] if len(domains) == 1 else "java-backend"
 
 
-def create_mock_session(context: dict[str, object], questions: list[dict[str, object]]) -> dict[str, object]:
-    """Create a sealed-in-intent mock session, never a review or profile event."""
-    _assert_context(context)
-    selected_domain = _selected_domain(context)
-    retest_count = 0
-    covered_topics: set[str] = set()
-    weakness_ids: set[str] = set()
-    normalized_questions: list[dict[str, object]] = []
+def _normalize_questions(questions: list[dict[str, object]]) -> list[dict[str, object]]:
+    if not isinstance(questions, list):
+        raise HandoffValidationError("questions must be a list")
+    normalized: list[dict[str, object]] = []
+    weakness_retests = 0
     for question in questions:
-        required = {"question_id", "domain", "source_tags", "topic_tags"}
+        if not isinstance(question, dict):
+            raise HandoffValidationError("each question must be an object")
+        required = {
+            "questionId", "domain", "sourceTags", "topicTags",
+            "originalQuestion", "originalAnswer", "followUps", "timeline",
+        }
         if not required.issubset(question):
-            raise HandoffValidationError("each question must have shared question metadata")
-        normalized = deepcopy(question)
-        tags = normalized["source_tags"]
-        if not isinstance(tags, list):
-            raise HandoffValidationError("source_tags must be a list")
-        if "profile_weakness" in tags:
-            retest_count += 1
-        covered_topics.update(str(topic) for topic in normalized["topic_tags"])
-        weakness_ids.update(str(item) for item in normalized.get("retest_weakness_ids", []))
-        normalized_questions.append(normalized)
-    if questions and retest_count / len(questions) > 0.4:
+            missing = ", ".join(sorted(required - set(question)))
+            raise HandoffValidationError(f"question missing: {missing}")
+        if not isinstance(question["questionId"], str) or not question["questionId"].strip():
+            raise HandoffValidationError("questionId must be a non-empty string")
+        if not isinstance(question["domain"], str) or not question["domain"].strip():
+            raise HandoffValidationError("question domain must be a non-empty string")
+        if not isinstance(question["sourceTags"], list) or not all(isinstance(tag, str) for tag in question["sourceTags"]):
+            raise HandoffValidationError("sourceTags must be a list of strings")
+        if not isinstance(question["topicTags"], list) or not all(isinstance(tag, str) for tag in question["topicTags"]):
+            raise HandoffValidationError("topicTags must be a list of strings")
+        if not isinstance(question["originalQuestion"], str) or not question["originalQuestion"].strip():
+            raise HandoffValidationError("originalQuestion must be a non-empty string")
+        if not isinstance(question["originalAnswer"], str):
+            raise HandoffValidationError("originalAnswer must be a string")
+        if not isinstance(question["followUps"], list) or not all(isinstance(item, dict) for item in question["followUps"]):
+            raise HandoffValidationError("followUps must be a list of objects")
+        if not isinstance(question["timeline"], list) or not all(isinstance(item, dict) for item in question["timeline"]):
+            raise HandoffValidationError("timeline must be a list of objects")
+        tags = {tag.lower() for tag in question["sourceTags"]}
+        if tags.intersection({"profileweakness", "profile_weakness", "weakness", "historyweakness"}):
+            weakness_retests += 1
+        normalized.append(deepcopy(question))
+    if normalized and weakness_retests / len(normalized) > 0.4:
         raise HandoffValidationError("weakness retests cannot exceed 40% of the session")
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return normalized
+
+
+def create_mock_session_event(
+    identity: dict[str, object],
+    questions: list[dict[str, object]],
+    *,
+    started_at: str,
+    completed_at: str,
+    event_id: str,
+    session_id: str,
+) -> dict[str, object]:
+    """Create an immutable ``interview.session.completed`` event.
+
+    ``identity`` must be the result of the current conversation's explicit
+    identity verification.  Answers, follow-up turns, and timelines are copied
+    verbatim so later review never needs a transcript artifact.
+    """
+    _assert_verified_identity(identity)
+    if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
+        raise HandoffValidationError("eventId must be a UUID")
+    if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
+        raise HandoffValidationError("sessionId must use MOCK-/REAL- and contain no path separators")
+    _assert_timestamp(started_at, "startedAt")
+    _assert_timestamp(completed_at, "completedAt")
+    normalized_questions = _normalize_questions(questions)
+    user_id = str(identity["userId"])
+    username = str(identity["username"]).strip()
     return {
-        "schema_version": "1.0",
-        "session_id": f"MOCK-{timestamp}-001",
-        "candidate_id": context["candidate_id"],
-        "source_type": "mock_interview",
-        "evidence_type": "system_transcript",
-        "evidence_confidence": 0.6,
-        "selected_domain": selected_domain,
-        "active_resume_id": context["active_resume_id"],
+        "schemaVersion": SCHEMA_VERSION,
+        "eventId": event_id,
+        "eventKey": f"{user_id}:interview:session:{session_id}:v1",
+        "eventType": "interview.session.completed",
+        "userId": user_id,
+        "username": username,
+        "sessionId": session_id,
+        "interviewType": "mock",
+        "domain": _selected_domain(normalized_questions),
+        "startedAt": started_at,
+        "completedAt": completed_at,
+        "status": "review_pending",
+        "resumeContext": {"used": False, "source": "current_conversation", "claims": []},
         "questions": normalized_questions,
-        "covered_topics": sorted(covered_topics),
-        "retest_weakness_ids": sorted(weakness_ids),
-        "state": "review_pending",
     }
 
 
-def seal_review_handoff(
-    context: dict[str, object], session: dict[str, object], transcript: str
-) -> dict[str, object]:
-    """Seal immutable evidence for reviewing; no review or profile update happens here."""
-    _assert_context(context)
-    if session.get("candidate_id") != context["candidate_id"]:
-        raise HandoffValidationError("session candidate does not match locked context")
-    if session.get("source_type") != "mock_interview" or session.get("state") != "review_pending":
-        raise HandoffValidationError("only pending mock sessions may be handed off")
-    handoff = deepcopy(session)
-    handoff["transcript_sha256"] = sha256(transcript.encode("utf-8")).hexdigest()
-    handoff["handoff_target"] = "reviewing-java-backend-interviews"
-    return handoff
+def save_session_copy(
+    event: dict[str, object],
+    output_root: str | Path,
+    persistence_status: str,
+    drive_receipt: dict[str, object] | None = None,
+) -> Path:
+    """Write the portable session copy below ``outputs/interview/<userId>``."""
+    if not isinstance(event, dict) or event.get("schemaVersion") != SCHEMA_VERSION:
+        raise HandoffValidationError("session event must use schemaVersion 1.2")
+    user_id = event.get("userId")
+    session_id = event.get("sessionId")
+    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
+        raise HandoffValidationError("session event requires a UUID userId")
+    if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
+        raise HandoffValidationError("session event requires a safe sessionId")
+    if persistence_status not in {"ok", "cloud_persistence_pending"}:
+        raise HandoffValidationError("persistenceStatus must be ok or cloud_persistence_pending")
+    destination = Path(output_root) / "interview" / user_id
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / f"interview-{session_id}-session.json"
+    payload: dict[str, Any] = deepcopy(event)
+    payload["persistenceStatus"] = persistence_status
+    if drive_receipt is not None:
+        payload["driveReceipt"] = deepcopy(drive_receipt)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path

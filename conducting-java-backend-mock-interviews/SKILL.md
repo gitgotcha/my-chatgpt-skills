@@ -1,61 +1,52 @@
 ---
 name: conducting-java-backend-mock-interviews
-description: Use when conducting a candidate-locked mock technical interview and submitting immutable source evidence through the reliable-drive-sync MCP.
+description: Use when conducting a Java backend mock interview with a verified identity and one immutable submit_event handoff.
 ---
 
-# 模拟面试执行与 MCP 交接
+# Java 后端模拟面试
 
-本 Skill 只负责候选人确认、逐题模拟、原始证据整理与 MCP 交接；不自行做最终评分、复盘或画像更新。**不得直接读写 Google Drive、D1、R2 或云端 HTTP 接口。**所有持久化只能调用 `reliable-drive-sync` MCP。
+本 Skill 负责身份确认、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。云端持久化只通过 MCP 暴露的唯一工具 `submit_event` 完成。
 
-## MCP 契约
+## 新对话身份门禁
 
-启动前确认本机 MCP 已配置 `RELIABLE_DRIVE_SYNC_INGRESS_URL` 与 `RELIABLE_DRIVE_SYNC_INGRESS_SHARED_SECRET`。可用工具：
+每次新对话都必须重新建立身份绑定，不能沿用上一段对话的内存状态：
 
-- `list_candidates(query?, limit?)`：只返回候选人摘要。
-- `get_candidate_context(candidateId, selectedDomain?, resumeId?, sessionId?)`：确认候选人后才可调用。
-- `submit_artifact(...)`：提交不可变 JSON、Markdown 或 DOCX；先写本机 SQLite Outbox，再异步交给云端。
+1. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "interview"`、`eventType: "identity.list"`，展示当前可用身份摘要。
+2. 给用户两个最小选项：`A` 选择已有身份，或 `B` 创建新用户。选择 A 时要求输入 `userId` 与姓名，并调用 `identity.verify`；选择 B 时仅要求姓名并调用 `identity.create`。
+3. 只有收到验证成功的 `{userId, username}` 后，才允许读取历史会话或开始提交面试事件。本轮上下文保存 `verified: true` 的身份对象；切换对话后必须再次执行以上步骤。
 
-若 MCP 未配置、工具不可用或返回未接受状态，保留本轮内容在对话中并明确说明“尚未持久化”；不要退回到 Drive 连接器或伪称已保存。
-
-## 强制启动顺序
-
-1. 先用 `list_candidates` 搜索或展示摘要。未确认前，不读取候选人上下文、简历、画像或历史会话。
-2. 展示候选人 ID、姓名/备注，要求用户明确二次确认。姓名不是主键；同名时必须选择 `candidateId`。
-3. 锁定 `ConfirmedCandidateContext`：`candidateId`、`displayName`、`confirmedByUser: true`、`confirmedAt`、`activeResumeArtifactKey`、`selectedDomain`。本轮任何 MCP 读取或提交都使用此 ID。
-4. 仅在锁定后调用 `get_candidate_context`；询问当前简历、是否更换/上传或不使用。简历声明只用于出题，绝不直接变成能力证据。
-5. 领域优先级为本轮明确方向、简历、候选人上下文、Java 后端默认；混合材料且无法可靠判断时让用户选择。
+身份注册和验证失败时，保留当前对话内容，不声称已保存，也不绕过门禁继续读取历史。
 
 ## 面试执行
 
-- 一次只问一道主问题，可连续追问；面试中不提供完整标准答案。
-- 用户说“不会”时保留原回答，最多一次启发追问后继续。
-- 使用简历时题源目标：简历/项目 35%、历史弱点变式 30%、领域知识 25%、算法与场景 10%；不使用简历时为 35%、45%、20%。弱点复测不超过总题数 40%，不得原题重复。
-- 每题记录 `questionId`、领域、`sourceTags`、`topicTags`、简历声明 ID、弱点 ID、原问题、原回答、追问和时间线。
+- 一次只问一道主问题，可以连续追问；面试中不直接提供完整标准答案。
+- 用户说“不知道”时保留原回答，最多提供一次启发式追问后继续。
+- 有简历时题源目标为：简历/项目 35%、历史弱点变式 30%、领域知识 25%、算法与场景 10%；无简历时为：历史弱点变式 35%、领域知识 45%、算法与场景 20%。弱点复测不得超过总题数 40%，不得原题重复。
+- 每题记录 `questionId`、`domain`、`sourceTags`、`topicTags`、简历声明或弱点标识（如有）、`originalQuestion`、`originalAnswer`、`followUps` 和 `timeline`。原回答永远不被事后改写。
 
-## 结束、不可变产物与交接
+## 会话事件交接
 
-结束时生成 `sessionId = MOCK-<UTC>-<uuid>`，并以同一个 `candidateId/sessionId` 调用 MCP 依次提交：
-
-1. `session.json`：`artifactType: "session"`，完整锁定上下文、题目索引和状态 `review_pending`。
-2. `raw_transcript.md`：`artifactType: "raw_transcript"`，原始问答、追问和时间线，不做事后改写。
-
-每个提交均必须具备：
+结束时生成 `sessionId = MOCK-<UTC>-<uuid>`，用 Python 辅助函数 `create_mock_session_event` 生成完整 JSON。提交 envelope 的固定结构为：
 
 ```json
 {
-  "schemaVersion": "1",
-  "artifactId": "UUID",
-  "artifactKey": "<candidateId>:interview:<sessionId>:<artifactType>:v1",
-  "candidateId": "...",
-  "sourceSkill": "interview",
-  "sessionId": "...",
-  "artifactType": "session | raw_transcript",
-  "fileName": "session.json | raw_transcript.md",
-  "contentType": "application/json | text/markdown",
-  "contentBase64": "...",
-  "sha256": "<content bytes sha256>",
-  "createdAt": "ISO-8601"
+  "schemaVersion": "1.2",
+  "namespace": "interview",
+  "eventType": "interview.session.completed",
+  "identity": {"userId": "<uuid>", "username": "<姓名>"},
+  "payload": {"userId": "<uuid>", "username": "<姓名>", "event": {"...": "schema-1.2 session event"}},
+  "requestId": "<uuid>"
 }
 ```
 
-`submit_artifact` 返回 `202` 即表示已可靠进入本机 Outbox/云端任务链路，不等同于 Drive 已完成；向用户说明“已提交后台同步”。相同 `artifactKey + sha256` 可安全重试；同 key 不同 SHA-256 是冲突，停止并调查。随后将 `sessionId`、两项 `artifactKey` 和 `review_pending` 交给 `reviewing-java-backend-interviews`。
+会话事件必须包含 `eventId`、`eventKey`、身份、时间、`status: "review_pending"`、`resumeContext` 以及题目数组。题目数组内保存原问题、原回答、追问和时间线，因此不再创建或上传独立 transcript 文件。
+
+只调用一次 `submit_event(interview.session.completed)`。成功回执用于本地副本元数据；云端失败时仍写本地副本，并把 `persistenceStatus` 标为 `cloud_persistence_pending`，不得伪称云端已保存。
+
+本地文件统一写入：
+
+```text
+outputs/interview/<userId>/interview-<sessionId>-session.json
+```
+
+本地 JSON 是可移植副本，不是画像快照来源。之后将 `sessionId` 和 `review_pending` 状态交给复盘 Skill；复盘 Skill 会在新的对话中再次验证身份。

@@ -77,6 +77,19 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         self.assertIn("cloud_persistence_pending", skill)
         self.assertIn("profile_cache_pending", skill)
 
+    def test_algorithm_uses_only_submit_event_for_persistence(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for required in (
+            "identity.list",
+            "identity.create",
+            "identity.verify",
+            "algorithm.learning.completed",
+            "submit_event",
+        ):
+            self.assertIn(required, skill)
+        for removed in ("find_or_create_candidate", "list_candidates", "submit_artifact"):
+            self.assertNotIn(removed, skill)
+
 
 if __name__ == "__main__":
     unittest.main()
