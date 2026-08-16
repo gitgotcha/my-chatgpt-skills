@@ -72,6 +72,30 @@ test("submitReview preserves the verified receipt when snapshot creation fails",
   assert.equal(result.receipt.eventKey, reviewEvent.eventKey);
 });
 
+test("submitReview reuses the verified event set for profile rebuild", async () => {
+  let listCalls = 0;
+  const reviewEvent = {
+    ...session,
+    eventId: "10000000-0000-4000-8000-000000000012",
+    eventKey: `${identity.userId}:interview:review:MOCK-1:v1`,
+    eventType: "interview.review.completed",
+    reviewVersion: 1,
+    sourceSessionEventId: session.eventId,
+    applyProfileChanges: true,
+    profileChanges: []
+  };
+  const eventStore = {
+    appendEvent: async (_requestedIdentity, value) => ({ event: value, receipt: { fileId: "review-file", eventKey: value.eventKey, eventId: value.eventId } }),
+    listVerifiedEvents: async () => { listCalls += 1; return [session]; }
+  };
+  const result = await createInterviewStore({ eventStore }).submitReview(identity, reviewEvent, {
+    createSnapshot: async (profile) => ({ profile })
+  });
+  assert.equal(result.status, "ok");
+  assert.equal(listCalls, 1);
+  assert.equal(result.data.profile.headEventId, reviewEvent.eventId);
+});
+
 test("submitReview requires a versioned event key matching reviewVersion", async () => {
   const eventStore = {
     appendEvent: async (_requestedIdentity, value) => ({ event: value, receipt: { fileId: "review-file", eventKey: value.eventKey, eventId: value.eventId } }),

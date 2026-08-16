@@ -84,14 +84,15 @@ export function createInterviewStore({ eventStore, drive, now = () => new Date()
     }
 
     try {
-      const allVerified = await events(identity);
+      const allVerified = [...verified];
       if (!allVerified.some((candidate) => candidate.eventId === persistedEvent.eventId)) allVerified.push(persistedEvent);
       const profile = rebuildInterviewProfile(allVerified, { now });
       const snapshotReceipt = options.createSnapshot
         ? await options.createSnapshot(profile, { identity, event })
         : await createSnapshot(identity, profile);
       return { status: "ok", receipt, data: { profile, snapshotReceipt } };
-    } catch {
+    } catch (cause) {
+      console.error("profile_snapshot_failed", cause instanceof Error ? cause.message : String(cause));
       return { status: "profile_cache_pending", receipt, data: { profileRebuildRequired: true } };
     }
   }
