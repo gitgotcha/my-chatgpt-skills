@@ -30,14 +30,25 @@ completion. Calling a removed tool returns JSON-RPC `-32601`.
 
 ## Runtime setup
 
-1. Create or select a Google Shared Drive folder and add the service-account
-   email as Writer. Service accounts do not have My Drive storage quota.
-2. Configure Worker secrets (never commit them):
+1. Create or select the Drive root folder and grant the OAuth user access. OAuth
+   is the recommended deployment because service accounts do not have My Drive
+   storage quota. A Shared Drive can also be used.
+2. Configure Worker secrets (never commit them). OAuth setup:
 
    ```text
    wrangler secret put MCP_BEARER_TOKEN
-   wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
    wrangler secret put GOOGLE_DRIVE_FOLDER_ID
+   wrangler secret put GOOGLE_OAUTH_CLIENT_ID
+   wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET
+   wrangler secret put GOOGLE_OAUTH_REFRESH_TOKEN
+   ```
+
+   Service-account alternative:
+
+   ```text
+   wrangler secret put MCP_BEARER_TOKEN
+   wrangler secret put GOOGLE_DRIVE_FOLDER_ID
+   wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON
    ```
 
 3. Deploy with `npx wrangler deploy`.
