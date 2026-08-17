@@ -42,3 +42,12 @@ class SharedSchemaTests(unittest.TestCase):
                 "read_artifact", "submit_artifact", "contentBase64", "raw_transcript.md",
             ):
                 self.assertNotIn(removed, skill, f"{removed} in {skill_path}")
+
+    def test_mock_interview_source_mix_is_project_first(self) -> None:
+        skill_path = Path(__file__).resolve().parents[1] / "SKILL.md"
+        skill = skill_path.read_text(encoding="utf-8")
+        for ratio in ("简历/项目 55%", "历史弱点变式 15%", "领域知识 10%", "算法与场景 20%"):
+            self.assertIn(ratio, skill)
+        self.assertIn("主来源", skill)
+        self.assertIn("topicTags", skill)
+        self.assertIn("最大余数法", skill)
