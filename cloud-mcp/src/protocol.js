@@ -63,6 +63,12 @@ const ALGORITHM_FIELDS = new Set([
   "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username", "observedAt", "source",
   "topic", "problem", "evidence", "outcome", "tags", "confidence"
 ]);
+const ALGORITHM_PLAN_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "localDate", "planId", "timezone", "generatedAt", "items"
+]);
+const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SAFE_ID = /^[0-9a-z-]+$/i;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const hasExactFields = (value, fields) => isObject(value) && Object.keys(value).every((field) => fields.has(field));
@@ -153,10 +159,23 @@ function validateAlgorithmEvent(event) {
   }
 }
 
+function validateAlgorithmPlanEvent(event) {
+  if (!hasExactFields(event, ALGORITHM_PLAN_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || event.eventType !== "algorithm.daily-plan-created"
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !LOCAL_DATE.test(event.localDate)
+    || !nonEmptyString(event.planId) || !SAFE_ID.test(event.planId)
+    || !nonEmptyString(event.timezone) || !timestamp(event.generatedAt)
+    || !Array.isArray(event.items) || !event.items.every(isObject)) {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
 export function validateEventForBoundary(event, eventType) {
   if (eventType === "interview.session.completed") validateSessionEvent(event);
   else if (eventType === "interview.review.completed") validateReviewEvent(event);
   else if (eventType === "algorithm.learning.completed") validateAlgorithmEvent(event);
+  else if (eventType === "algorithm.daily-plan-created") validateAlgorithmPlanEvent(event);
   else throw new ProtocolError("invalid_event_type");
 }
 

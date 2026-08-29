@@ -7,7 +7,7 @@ const REVIEW_EVENT_ID = "33333333-3333-4333-8333-333333333333";
 const SESSION_ID = "MOCK-20260814T000000Z-44444444-4444-4444-8444-444444444444";
 
 function fakeDrive() {
-  const folders = new Map();
+  const folders = new Map([["root", { id: "root", name: "root", parents: [] }]]);
   const files = new Map();
   let sequence = 0;
   const childItems = (parentId, name) => [...folders.values(), ...files.values()]
@@ -18,6 +18,8 @@ function fakeDrive() {
   });
   return {
     rootFolderId: "root",
+    folders,
+    files,
     filesByPrefix(prefix) {
       return [...files.values()].filter((file) => file.name.startsWith(prefix));
     },
@@ -186,4 +188,15 @@ test("name registration, session, review, and snapshot share one resolved userId
   });
   assert.equal(algorithm.status, "ok");
   assert.equal(algorithm.identity.userId, identity.userId);
+  assert.equal(algorithm.data.profile.headEventId, algorithmEvent.eventId);
+
+  // Every write lives below the single plugin root; no namespace-scoped
+  // registry or users folder may exist any more.
+  const namespaceScoped = [...drive.folders.values()]
+    .filter((folder) => folder.parents?.length === 1 && folder.parents[0] === "root"
+      && ["algorithm", "interview"].includes(folder.name));
+  assert.deepEqual(namespaceScoped, []);
+  assert.equal(drive.folders.get(drive.folders.get(
+    drive.files.get([...drive.files.values()].find((file) => file.name === "identity.json").id).parents[0]
+  ).parents[0]).name, "users");
 });

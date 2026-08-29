@@ -5,6 +5,7 @@ import { createUserStore } from "./user-store.js";
 import { createEventStore } from "./event-store.js";
 import { createLegacyReader } from "./legacy-reader.js";
 import { createInterviewStore } from "./interview-store.js";
+import { createAlgorithmStore } from "./algorithm-store.js";
 
 const DOMAIN_BY_NAMESPACE = new Map([
   ["algorithm", "algorithm"],
@@ -71,7 +72,8 @@ export async function dispatchSubmitEvent(env, args, deps) {
     }
     return stores.get(namespace);
   };
-  const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview"), drive });
+  const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview"), drive, layout });
+  const algorithmStore = () => createAlgorithmStore({ eventStore: eventStore("algorithm"), layout, drive });
 
   const handlers = {
     "system.user-registered": async () => ({
@@ -91,10 +93,8 @@ export async function dispatchSubmitEvent(env, args, deps) {
       return { status: "ok", ...result };
     },
     "interview.review.completed": (_env, { payload }) => interviewStore().submitReview(identity, payload.event),
-    "algorithm.learning.completed": async (_env, { payload }) => {
-      const { event, receipt } = await eventStore("algorithm").appendEvent(identity, payload.event);
-      return { status: "ok", event, receipt };
-    }
+    "algorithm.learning.completed": (_env, { payload }) => algorithmStore().submitLearning(identity, payload.event),
+    "algorithm.daily-plan-created": (_env, { payload }) => algorithmStore().createDailyPlan(identity, payload.event)
   };
 
   const handler = deps.handlers?.[bound.eventType] ?? handlers[bound.eventType];
