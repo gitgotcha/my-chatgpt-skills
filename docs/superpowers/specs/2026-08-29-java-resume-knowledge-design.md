@@ -154,6 +154,10 @@ DriveRoot/my-chatGPT-skills/
 ```text
 system.user-registered
 system.legacy-migration-requested
+algorithm.learning.completed
+algorithm.daily-plan-created
+interview.session.completed
+interview.review.completed
 resume-knowledge.resume-ingested
 resume-knowledge.claim-confirmed
 resume-knowledge.claim-rejected
@@ -168,6 +172,10 @@ resume-knowledge.answer-scored
 
 - `user-registered`：幂等创建或返回全局用户注册与用户目录。
 - `legacy-migration-requested`：执行 dry-run 或经过确认的非破坏性复制。
+- `algorithm.learning.completed`：追加算法学习事件并物化算法画像快照。
+- `algorithm.daily-plan-created`：保存不可变的算法当日题单。
+- `interview.session.completed`：追加模拟或真实面试会话事件，不直接修改画像。
+- `interview.review.completed`：追加面试复盘事件并物化面试画像快照。
 - `resume-ingested`：保存结构化简历声明快照和文件指纹。
 - `claim-confirmed` / `claim-rejected`：更新证据状态，供下一版题库使用。
 - `question-bank-created`：保存与简历版本绑定的规范题库快照。
