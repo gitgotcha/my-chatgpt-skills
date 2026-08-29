@@ -95,6 +95,11 @@ const escapeDriveQuery = (value) => value.replaceAll("\\", "\\\\").replaceAll("'
 
 const driveFields = "id,name,mimeType,parents,createdTime";
 
+const JSON_TARGET = /^((identity)|(registration-[0-9a-f-]+)|(event-[0-9a-f-]+)|(snapshot-[0-9TZ:.-]+-[0-9a-f-]+)|(daily-plan-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-z-]+)|(resume-[0-9a-z-]+)|(question-bank-[0-9a-z-]+)|(migration-[0-9a-z-]+))\.json$/i;
+
+const validJsonTarget = (name) => typeof name === "string" && !/[\\/]/.test(name) && !name.includes("..")
+  && JSON_TARGET.test(name);
+
 const requiredParentId = (parentId) => {
   if (!parentId) throw new Error("parentId is required");
   return parentId;
@@ -155,9 +160,7 @@ export function createDriveRepository(env, deps = {}) {
     },
     async createJson(parentId, name, value) {
       if (!parentId) throw new Error("parentId is required");
-      if (!/^((identity)|(registration-[0-9a-f-]+)|(event-[0-9a-f-]+)|(snapshot-[0-9TZ:.-]+-[0-9a-f-]+))\.json$/i.test(name)) {
-        throw new Error("invalid JSON target");
-      }
+      if (!validJsonTarget(name)) throw new Error("invalid JSON target");
       const file = await uploadFileImpl(parentId, name, JSON.stringify(value), "application/json");
       if (!file?.id) throw new Error("Google Drive write failed: missing file id");
       return this.readJson(file.id);
