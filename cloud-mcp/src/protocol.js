@@ -1,3 +1,6 @@
+import { SCORE_DIMENSIONS, SCORE_DIMENSION_KEYS, SCORE_TOTAL, EVIDENCE_LEVELS, QUESTION_TYPES } from "./resume-knowledge-model.js";
+import { DAILY_SLOT_PLAN } from "./daily-plan-selector.js";
+
 export const SCHEMA_VERSION = "1.2";
 export const ALLOWED_NAMESPACES = new Set(["system", "algorithm", "interview", "resume-knowledge"]);
 export const ALLOWED_EVENT_TYPES = new Set([
@@ -67,8 +70,43 @@ const ALGORITHM_PLAN_FIELDS = new Set([
   "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
   "localDate", "planId", "timezone", "generatedAt", "items"
 ]);
+const RESUME_INGESTED_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "resumeVersion", "fingerprint", "activatedAt", "claims", "claimRelations", "techTags", "evidenceLocations"
+]);
+const RESUME_CLAIM_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "resumeVersion", "claimId", "decidedAt", "note"
+]);
+const RESUME_BANK_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "resumeVersion", "generatedAt", "questions"
+]);
+const BANK_QUESTION_FIELDS = new Set([
+  "questionKey", "knowledgePointId", "evidence", "type", "prompt", "answerChain",
+  "scoringPoints", "referenceAnswer", "resumeEvidenceRefs", "conditional", "confirmed",
+  "masteryScore", "lastScoredLocalDate"
+]);
+const RESUME_PLAN_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "resumeVersion", "localDate", "planId", "timezone", "generatedAt", "items"
+]);
+const RESUME_PLAN_ITEM_FIELDS = new Set([
+  "questionKey", "slot", "knowledgePointId", "evidence", "type", "prompt"
+]);
+const ANSWER_SCORED_FIELDS = new Set([
+  "schemaVersion", "eventId", "eventKey", "eventType", "userId", "username",
+  "questionKey", "localDate", "resumeVersion", "scoredAt", "scores", "total", "feedback"
+]);
+const FEEDBACK_FIELDS = new Set(["strengths", "issues", "issueCategories", "answerChain", "referenceAnswer"]);
+const RESUME_CLAIM_TYPES = new Set(["resume-knowledge.claim-confirmed", "resume-knowledge.claim-rejected"]);
+const DAILY_SLOTS = new Set(DAILY_SLOT_PLAN.map((entry) => entry.slot));
+
 const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SAFE_ID = /^[0-9a-z-]+$/i;
+// Semantically stable question keys only: rewording a question must not create
+// a new key and thereby escape the once-per-day scoring limit.
+const QUESTION_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const hasExactFields = (value, fields) => isObject(value) && Object.keys(value).every((field) => fields.has(field));
@@ -76,6 +114,9 @@ const nonEmptyString = (value) => typeof value === "string" && value.trim().leng
 const uuid = (value) => typeof value === "string" && UUID.test(value);
 const timestamp = (value) => typeof value === "string" && RFC3339.test(value) && !Number.isNaN(Date.parse(value));
 const stringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === "string");
+const nonEmptyStringArray = (value) => stringArray(value) && value.every(nonEmptyString);
+const objectArray = (value) => Array.isArray(value) && value.every(isObject);
+const number = (value) => typeof value === "number" && Number.isFinite(value);
 
 function validateQuestion(question) {
   if (!hasExactFields(question, QUESTION_FIELDS)
@@ -171,11 +212,123 @@ function validateAlgorithmPlanEvent(event) {
   }
 }
 
+function validateResumeIngestedEvent(event) {
+  if (!hasExactFields(event, RESUME_INGESTED_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || event.eventType !== "resume-knowledge.resume-ingested"
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !nonEmptyString(event.resumeVersion)
+    || !SAFE_ID.test(event.resumeVersion) || !nonEmptyString(event.fingerprint)
+    || !timestamp(event.activatedAt) || !objectArray(event.claims)
+    || !objectArray(event.claimRelations) || !nonEmptyStringArray(event.techTags)
+    || !objectArray(event.evidenceLocations)
+    || !event.claims.every((claim) => nonEmptyString(claim.claimId) && EVIDENCE_LEVELS.has(claim.evidence))) {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
+function validateResumeClaimEvent(event) {
+  if (!hasExactFields(event, RESUME_CLAIM_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || !RESUME_CLAIM_TYPES.has(event.eventType)
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !nonEmptyString(event.resumeVersion)
+    || !nonEmptyString(event.claimId) || !SAFE_ID.test(event.claimId)
+    || !timestamp(event.decidedAt) || (event.note !== undefined && typeof event.note !== "string")) {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
+function validateBankQuestion(question) {
+  if (!hasExactFields(question, BANK_QUESTION_FIELDS)
+    || !nonEmptyString(question.questionKey) || !QUESTION_KEY.test(question.questionKey)
+    || !nonEmptyString(question.knowledgePointId) || !EVIDENCE_LEVELS.has(question.evidence)
+    || !QUESTION_TYPES.has(question.type) || !nonEmptyString(question.prompt)
+    || !nonEmptyStringArray(question.answerChain) || !nonEmptyStringArray(question.scoringPoints)
+    || typeof question.referenceAnswer !== "string" || !nonEmptyStringArray(question.resumeEvidenceRefs)
+    || typeof question.conditional !== "boolean" || typeof question.confirmed !== "boolean"
+    || !(question.masteryScore === null || number(question.masteryScore))
+    || !(question.lastScoredLocalDate === null
+      || (typeof question.lastScoredLocalDate === "string" && LOCAL_DATE.test(question.lastScoredLocalDate)))) {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
+function validateResumeQuestionBankEvent(event) {
+  if (!hasExactFields(event, RESUME_BANK_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || event.eventType !== "resume-knowledge.question-bank-created"
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !nonEmptyString(event.resumeVersion)
+    || !timestamp(event.generatedAt) || !objectArray(event.questions)) {
+    throw new ProtocolError("invalid_event");
+  }
+  event.questions.forEach(validateBankQuestion);
+}
+
+function validateResumePlanItem(item) {
+  if (!hasExactFields(item, RESUME_PLAN_ITEM_FIELDS)
+    || !nonEmptyString(item.questionKey) || !QUESTION_KEY.test(item.questionKey)
+    || !DAILY_SLOTS.has(item.slot)
+    || (item.knowledgePointId !== undefined && !nonEmptyString(item.knowledgePointId))
+    || (item.evidence !== undefined && !EVIDENCE_LEVELS.has(item.evidence))
+    || (item.type !== undefined && !QUESTION_TYPES.has(item.type))
+    || (item.prompt !== undefined && typeof item.prompt !== "string")) {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
+function validateResumePlanEvent(event) {
+  if (!hasExactFields(event, RESUME_PLAN_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || event.eventType !== "resume-knowledge.daily-plan-created"
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !nonEmptyString(event.resumeVersion)
+    || !LOCAL_DATE.test(event.localDate) || !nonEmptyString(event.planId) || !SAFE_ID.test(event.planId)
+    || !nonEmptyString(event.timezone) || !timestamp(event.generatedAt) || !objectArray(event.items)) {
+    throw new ProtocolError("invalid_event");
+  }
+  event.items.forEach(validateResumePlanItem);
+}
+
+function validateAnswerScoredEvent(event) {
+  if (!hasExactFields(event, ANSWER_SCORED_FIELDS)
+    || event.schemaVersion !== SCHEMA_VERSION || event.eventType !== "resume-knowledge.answer-scored"
+    || !uuid(event.eventId) || !nonEmptyString(event.eventKey) || !uuid(event.userId)
+    || !nonEmptyString(event.username) || !nonEmptyString(event.questionKey)
+    || !QUESTION_KEY.test(event.questionKey) || !LOCAL_DATE.test(event.localDate)
+    || !nonEmptyString(event.resumeVersion) || !timestamp(event.scoredAt)
+    || !isObject(event.scores) || !isObject(event.feedback)
+    || Object.keys(event.scores).length !== SCORE_DIMENSION_KEYS.length) {
+    throw new ProtocolError("invalid_event");
+  }
+  // Every dimension stays inside its own weight and the four must add up to
+  // the reported total, so a score can never be inflated by re-balancing.
+  let sum = 0;
+  for (const [dimension, weight] of Object.entries(SCORE_DIMENSIONS)) {
+    const value = event.scores[dimension];
+    if (!number(value) || value < 0 || value > weight) throw new ProtocolError("invalid_event");
+    sum += value;
+  }
+  if (!number(event.total) || event.total < 0 || event.total > SCORE_TOTAL
+    || Math.abs(sum - event.total) > 1e-9) {
+    throw new ProtocolError("invalid_event");
+  }
+  const feedback = event.feedback;
+  if (!hasExactFields(feedback, FEEDBACK_FIELDS)
+    || !nonEmptyStringArray(feedback.strengths) || !nonEmptyStringArray(feedback.issues)
+    || !nonEmptyStringArray(feedback.issueCategories) || !nonEmptyStringArray(feedback.answerChain)
+    || typeof feedback.referenceAnswer !== "string") {
+    throw new ProtocolError("invalid_event");
+  }
+}
+
 export function validateEventForBoundary(event, eventType) {
   if (eventType === "interview.session.completed") validateSessionEvent(event);
   else if (eventType === "interview.review.completed") validateReviewEvent(event);
   else if (eventType === "algorithm.learning.completed") validateAlgorithmEvent(event);
   else if (eventType === "algorithm.daily-plan-created") validateAlgorithmPlanEvent(event);
+  else if (eventType === "resume-knowledge.resume-ingested") validateResumeIngestedEvent(event);
+  else if (RESUME_CLAIM_TYPES.has(eventType)) validateResumeClaimEvent(event);
+  else if (eventType === "resume-knowledge.question-bank-created") validateResumeQuestionBankEvent(event);
+  else if (eventType === "resume-knowledge.daily-plan-created") validateResumePlanEvent(event);
+  else if (eventType === "resume-knowledge.answer-scored") validateAnswerScoredEvent(event);
   else throw new ProtocolError("invalid_event_type");
 }
 
