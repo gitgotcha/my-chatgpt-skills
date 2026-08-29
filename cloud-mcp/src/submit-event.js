@@ -3,6 +3,7 @@ import { createDriveRepository } from "./google-drive.js";
 import { createStorageLayout } from "./storage-layout.js";
 import { createUserStore } from "./user-store.js";
 import { createEventStore } from "./event-store.js";
+import { createLegacyReader } from "./legacy-reader.js";
 import { createInterviewStore } from "./interview-store.js";
 
 const DOMAIN_BY_NAMESPACE = new Map([
@@ -49,18 +50,6 @@ function withIdentity(envelope, identity) {
   return bound;
 }
 
-// The identity has already been resolved and verified against the global user
-// registry, so the downstream event store must not re-derive it from a legacy
-// namespace directory.
-const preverifiedIdentity = (identity) => ({
-  verifyIdentity: async (value) => {
-    if (value?.userId !== identity.userId || value?.username !== identity.username) {
-      throw new Error("identity_mismatch");
-    }
-    return { status: "ok", identity: { ...value, verified: true } };
-  }
-});
-
 export async function dispatchSubmitEvent(env, args, deps) {
   const envelope = inspectEnvelope(args);
   const drive = deps.drive ?? createDriveRepository(env, deps);
@@ -73,11 +62,12 @@ export async function dispatchSubmitEvent(env, args, deps) {
     validateEventForBoundary(bound.payload.event, bound.eventType);
   }
 
+  const legacyReader = deps.legacyReader ?? createLegacyReader({ drive });
   const stores = new Map();
   const eventStore = (namespace) => {
     if (!stores.has(namespace)) {
       stores.set(namespace, deps.eventStores?.[namespace]
-        ?? createEventStore({ namespace, namespaceStore: preverifiedIdentity(identity), drive }));
+        ?? createEventStore({ domain: namespace, userStore, layout, drive, legacyReader }));
     }
     return stores.get(namespace);
   };

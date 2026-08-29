@@ -47,6 +47,18 @@ function algorithmDrive() {
   };
 }
 
+function ancestryOf(drive, file) {
+  const names = [file.name];
+  let parentId = file.parents[0];
+  while (parentId && parentId !== "root") {
+    const parent = drive.folders.get(parentId) ?? drive.files.get(parentId);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parents?.[0];
+  }
+  return names;
+}
+
 function learningEvent(userId, username, eventId = "10000000-0000-4000-8000-000000000001") {
   return {
     schemaVersion: "1.2",
@@ -232,7 +244,7 @@ test("submit_event dispatches the validated envelope to its event handler", asyn
   assert.equal(received.payload.username, "Ada");
 });
 
-test("algorithm learning events use the algorithm namespace event folder", async () => {
+test("algorithm learning events use the canonical algorithm events folder", async () => {
   const drive = algorithmDrive();
   const identity = { userId: "00000000-0000-4000-8000-000000000001", username: "算法用户" };
   const event = {
@@ -268,15 +280,17 @@ test("algorithm learning events use the algorithm namespace event folder", async
   assert.equal(result.status, "ok");
   assert.match(result.receipt.fileId, /^file-/);
   const algorithmEventsFile = drive.createdJsonFiles.find((file) => file.name === `event-${event.eventId}.json`);
-  const algorithmEventsFolder = algorithmEventsFile && drive.folders.get(algorithmEventsFile.parents[0]);
-  assert.ok(algorithmEventsFolder);
-  assert.equal(algorithmEventsFolder.name, "events");
-  const userFolder = drive.folders.get(algorithmEventsFolder.parents[0]);
-  const usersFolder = drive.folders.get(userFolder.parents[0]);
-  const namespaceFolder = drive.folders.get(usersFolder.parents[0]);
-  assert.equal(usersFolder.name, "users");
-  assert.equal(namespaceFolder.name, "algorithm");
+  assert.ok(algorithmEventsFile);
+  assert.deepEqual(ancestryOf(drive, algorithmEventsFile), [
+    "my-chatGPT-skills", "users", identity.userId, "algorithm", "events", `event-${event.eventId}.json`
+  ]);
   assert.equal(result.event.eventType, "algorithm.learning.completed");
+
+  // No namespace-scoped registry or users folder may be created any more.
+  const namespaceScoped = [...drive.folders.values()]
+    .filter((folder) => folder.parents?.length === 1 && folder.parents[0] === "root"
+      && ["algorithm", "interview"].includes(folder.name));
+  assert.deepEqual(namespaceScoped, []);
 });
 
 test("protocol accepts the system and resume-knowledge namespaces", () => {
