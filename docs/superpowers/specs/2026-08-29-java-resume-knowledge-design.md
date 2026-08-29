@@ -17,6 +17,7 @@ Java 后端知识地图、规范题库和人物掌握度快照，并支持用户
 - 保证同一用户、同一自然日、同一稳定题目只接受第一次回答计分。
 - 所有插件持久化数据只通过 `submit_event` MCP 提交。
 - 所有新数据统一写入 `DriveRoot/my-chatGPT-skills/`。
+- 对算法学习、模拟面试和面试复盘做全量规范化迁移，使有效技能说明、模板、Schema、辅助脚本与 Worker 实现遵守同一身份和目录契约。
 
 非目标：
 
@@ -411,14 +412,46 @@ java-knowledge-based-on-resume-learn-skill/
 - 增加新路径优先、旧路径回退的只读适配。
 - 通过迁移事件支持 dry-run 和非破坏性复制。
 
-### 15.3 现有技能
+### 15.3 现有技能全量规范化（必须实现）
 
-更新算法学习、模拟面试、面试复盘和相关共享说明，使所有有效写入说明统一指向：
+本项不是文档整理，而是现有持久化能力的行为迁移。算法学习、模拟面试、面试复盘及 Cloud MCP 必须同时切换，不能出现“Skill 声明新路径、Worker 仍写旧路径”的半迁移状态。
 
-- `DriveRoot/my-chatGPT-skills/`；
-- 全局姓名注册与独立 `userId`；
-- `submit_event` MCP 唯一写入口；
-- 不再引用有效的 `profile/current`、`profile/history` 或旧候选人目录作为当前契约。
+共享要求：
+
+- `AGENTS.md`、三个 `SKILL.md`、当前有效 reference、Schema、辅助脚本和 Cloud MCP 实现统一使用 `DriveRoot/my-chatGPT-skills/`。
+- 三个技能都按标准化姓名解析全局注册；不存在时允许在 `submit_event` 调用内创建稳定独立的 `userId`，不再维护 namespace 独立身份。
+- 所有云端业务写入只能通过 `submit_event`；技能、模板和辅助脚本不得直接创建、更新、移动或删除 Drive 文件。
+- 旧路径只允许出现在明确标注为“legacy read-only”的适配器、迁移说明、迁移测试或历史设计文档中；不得作为当前写入目标、每日任务输入或恢复回退目标。
+
+`algorithm-learning`：
+
+- 事件统一物化到 `users/<userId>/algorithm/events/`。
+- 画像统一物化到 `users/<userId>/algorithm/profile/snapshots/`。
+- 每日题单统一物化到 `users/<userId>/algorithm/plans/daily/`。
+- 删除当前契约中对 `algorithm/users/`、`practice/`、`profile/current`、`profile/history`、JSONL 事件日志和直接 Drive 写入的有效依赖。
+- Cloud MCP 在保存 `algorithm.learning.completed` 后真实重建算法画像快照，补齐当前“只写事件、不生成快照”的行为缺口。
+
+`conducting-java-backend-mock-interviews`：
+
+- 模拟面试会话事件统一物化到 `users/<userId>/interview/events/`。
+- 继续只负责会话事件，不直接生成画像快照；本地 `outputs/interview/<userId>/` 副本仍是非画像派生文件。
+- 删除 CandidateIndex、`candidate_id` 和候选人根目录作为运行时身份或云端写入契约的有效说明。
+
+`reviewing-java-backend-interviews`：
+
+- 复盘事件统一物化到 `users/<userId>/interview/events/`。
+- 画像快照统一物化到 `users/<userId>/interview/profile/snapshots/`。
+- 删除 `system/candidate_index.json`、`candidates/<candidate_id>/`、`profile/current_profile.json`、原始 transcript/报告上传等旧运行时写入流程；报告只保留本地派生输出。
+- 复盘继续消费会话事件并生成确定性画像变化，但持久化和快照物化全部由 Worker 完成。
+
+`backend-project-learning` 当前没有人物画像或云端持久化功能，不为其创建空领域目录。如果未来新增持久化，必须复用全局注册和 `submit_event`，不得另建身份或根目录。
+
+Cloud MCP：
+
+- 将现有 namespace 目录构造改为统一插件根、全局注册和用户领域目录构造。
+- 为算法、面试和简历知识三个领域提供统一的追加事件、幂等、读回校验和快照物化骨架。
+- 保留新路径优先、旧路径回退的只读适配；任何写入失败都不得转写旧 namespace 目录。
+- 对原始事件成功但投影失败的调用返回可重试状态，并用相同幂等键补做投影。
 
 ## 16. 验证与验收
 
@@ -457,6 +490,9 @@ java-knowledge-based-on-resume-learn-skill/
 - 行为测试覆盖关键失败模式。
 - 路径文档与 Worker 实现一致。
 - Git 差异中不存在旧路径的新写入说明。
+- 仓库级契约测试证明算法、模拟面试、面试复盘和简历八股都使用同一插件根、全局注册与 `submit_event`。
+- 旧路径扫描只允许命中 legacy 适配器、迁移测试和带有明确废弃标记的历史文档。
+- 运行时集成测试证明算法事件、面试会话、面试复盘与简历答题分别落入规范化目录，且不会创建 namespace 级 `user-registry/` 或 `users/`。
 - 未执行任何破坏性 Drive 操作。
 
 达到以上门槛后，才提交并推送完整实现。
