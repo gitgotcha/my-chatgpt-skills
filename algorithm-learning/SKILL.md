@@ -32,6 +32,8 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
 
+所有算法数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。本领域的事件、快照与每日题单分别位于 `users/<userId>/algorithm/events/`、`users/<userId>/algorithm/profile/snapshots/` 和 `users/<userId>/algorithm/plans/daily/`；写入失败时停止，不回退到旧目录。
+
 ### 按姓名解析用户
 
 1. 新算法对话先暂存用户请求，再取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
