@@ -56,7 +56,7 @@ function fakeDrive() {
   };
 }
 
-function request(id, eventType, payload, namespace = "interview") {
+function request(id, eventType, payload, namespace = "interview", identity) {
   return new Request("https://example.test/mcp", {
     method: "POST",
     headers: { authorization: "Bearer secret", "content-type": "application/json" },
@@ -70,6 +70,7 @@ function request(id, eventType, payload, namespace = "interview") {
           schemaVersion: "1.2",
           namespace,
           eventType,
+          ...(identity ? { identity } : {}),
           payload,
           requestId: `99999999-9999-4999-8999-${String(id).padStart(12, "0")}`
         }
@@ -78,8 +79,8 @@ function request(id, eventType, payload, namespace = "interview") {
   });
 }
 
-async function call(drive, id, eventType, payload) {
-  const response = await handleRequest(request(id, eventType, payload), {
+async function call(drive, id, eventType, payload, { namespace, identity } = {}) {
+  const response = await handleRequest(request(id, eventType, payload, namespace, identity), {
     MCP_BEARER_TOKEN: "secret",
     GOOGLE_DRIVE_FOLDER_ID: "root"
   }, { drive });
@@ -89,13 +90,19 @@ async function call(drive, id, eventType, payload) {
   return JSON.parse(body.result.content[0].text);
 }
 
-test("new identity, session, new-conversation verification, review, and snapshot complete", async () => {
+test("name registration, session, review, and snapshot share one resolved userId", async () => {
   const drive = fakeDrive();
-  const created = await call(drive, 1, "identity.create", { username: "验收用户" });
-  assert.equal(created.status, "ok");
-  const identity = created.identity;
-  assert.equal(identity.username, "验收用户");
+  const name = "验收用户";
+
+  const registered = await call(drive, 1, "system.user-registered", { displayName: name }, { namespace: "system" });
+  assert.equal(registered.status, "ok");
+  const identity = registered.identity;
+  assert.equal(identity.username, name);
   assert.match(identity.userId, /^[0-9a-f-]{36}$/i);
+
+  // Re-submitting the same name must resolve to the same user.
+  const reresolved = await call(drive, 7, "system.user-registered", { displayName: ` ${name} ` }, { namespace: "system" });
+  assert.equal(reresolved.identity.userId, identity.userId);
 
   const sessionEvent = {
     schemaVersion: "1.2",
@@ -113,20 +120,15 @@ test("new identity, session, new-conversation verification, review, and snapshot
     resumeContext: { used: false, source: "current_conversation", claims: [] },
     questions: []
   };
-  const session = await call(drive, 2, "interview.session.completed", {
-    userId: identity.userId, username: identity.username, event: sessionEvent
-  });
+  const session = await call(drive, 2, "interview.session.completed", { event: sessionEvent }, { identity: { username: name } });
   assert.equal(session.status, "ok");
+  assert.equal(session.identity.userId, identity.userId);
 
-  const verified = await call(drive, 3, "identity.verify", identity);
-  assert.deepEqual(verified.identity, identity);
-  const listed = await call(drive, 4, "interview.session.list", identity);
+  const listed = await call(drive, 4, "interview.session.list", {}, { identity: { username: name } });
   assert.equal(listed.data.sessions.length, 1);
   assert.equal(listed.data.sessions[0].sessionId, SESSION_ID);
 
-  const loaded = await call(drive, 5, "interview.session.load", {
-    userId: identity.userId, username: identity.username, sessionId: SESSION_ID
-  });
+  const loaded = await call(drive, 5, "interview.session.load", { sessionId: SESSION_ID }, { identity: { username: name } });
   assert.equal(loaded.data.session.eventId, SESSION_EVENT_ID);
 
   const reviewEvent = {
@@ -157,9 +159,31 @@ test("new identity, session, new-conversation verification, review, and snapshot
     applyProfileChanges: true,
     completedAt: "2026-08-14T01:00:00.000Z"
   };
-  const reviewed = await call(drive, 6, "interview.review.completed", {
-    userId: identity.userId, username: identity.username, event: reviewEvent
-  });
+  const reviewed = await call(drive, 6, "interview.review.completed", { event: reviewEvent }, { identity: { username: name } });
   assert.equal(reviewed.status, "ok", JSON.stringify(reviewed));
   assert.equal(drive.filesByPrefix("snapshot-").length, 1);
+
+  // The same resolved user must be reused by another domain.
+  const algorithmEvent = {
+    schemaVersion: "1.2",
+    eventId: "44444444-4444-4444-8444-444444444444",
+    eventKey: `${identity.userId}:algorithm-learning:two-sum:2026-08-14T10:00:00.000Z`,
+    eventType: "algorithm.learning.completed",
+    userId: identity.userId,
+    username: identity.username,
+    observedAt: "2026-08-14T10:00:00.000Z",
+    source: "qa",
+    topic: "two-sum",
+    problem: { title: "Two Sum", source: "Hot100", url: "" },
+    outcome: "consulted",
+    evidence: "用户请求讲解两数之和。",
+    tags: ["hash-map"],
+    confidence: "medium"
+  };
+  const algorithm = await call(drive, 8, "algorithm.learning.completed", { event: algorithmEvent }, {
+    namespace: "algorithm",
+    identity: { username: name }
+  });
+  assert.equal(algorithm.status, "ok");
+  assert.equal(algorithm.identity.userId, identity.userId);
 });

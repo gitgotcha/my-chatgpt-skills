@@ -1,26 +1,42 @@
 export const SCHEMA_VERSION = "1.2";
-export const ALLOWED_NAMESPACES = new Set(["algorithm", "interview"]);
+export const ALLOWED_NAMESPACES = new Set(["system", "algorithm", "interview", "resume-knowledge"]);
 export const ALLOWED_EVENT_TYPES = new Set([
-  "identity.list",
-  "identity.create",
-  "identity.verify",
+  "system.user-registered",
+  "system.legacy-migration-requested",
   "algorithm.learning.completed",
+  "algorithm.daily-plan-created",
   "interview.session.list",
   "interview.session.load",
   "interview.session.completed",
-  "interview.review.completed"
+  "interview.review.completed",
+  "resume-knowledge.resume-ingested",
+  "resume-knowledge.claim-confirmed",
+  "resume-knowledge.claim-rejected",
+  "resume-knowledge.question-bank-created",
+  "resume-knowledge.daily-plan-created",
+  "resume-knowledge.answer-scored"
 ]);
 const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "identity", "payload", "requestId"]);
-const PAYLOAD_FIELDS = new Map([
-  ["identity.list", []],
-  ["identity.create", ["username"]],
-  ["identity.verify", ["userId", "username"]],
-  ["interview.session.list", ["userId", "username"]],
-  ["interview.session.load", ["userId", "username", "sessionId"]],
-  ["interview.session.completed", ["userId", "username", "event"]],
-  ["interview.review.completed", ["userId", "username", "event"]],
-  ["algorithm.learning.completed", ["event"]]
+const IDENTITY_FIELDS = new Set(["userId", "username"]);
+const LEGACY_MODES = new Set(["dry-run", "execute"]);
+const COMMON_OPTIONAL = ["userId", "username"];
+const PAYLOAD_SCHEMA = new Map([
+  ["system.user-registered", { required: ["displayName"], optional: [...COMMON_OPTIONAL] }],
+  ["system.legacy-migration-requested", { required: ["displayName", "mode"], optional: [...COMMON_OPTIONAL, "domains"] }],
+  ["algorithm.learning.completed", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["algorithm.daily-plan-created", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["interview.session.list", { required: [], optional: [...COMMON_OPTIONAL] }],
+  ["interview.session.load", { required: ["sessionId"], optional: [...COMMON_OPTIONAL] }],
+  ["interview.session.completed", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["interview.review.completed", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.resume-ingested", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.claim-confirmed", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.claim-rejected", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.question-bank-created", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.daily-plan-created", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
+  ["resume-knowledge.answer-scored", { required: ["event"], optional: [...COMMON_OPTIONAL] }]
 ]);
+const namespaceFor = (eventType) => eventType.split(".")[0];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION_ID = /^(MOCK|REAL)-[^/\\]+$/;
@@ -151,7 +167,7 @@ export class ProtocolError extends Error {
   }
 }
 
-export function validateEnvelope(input) {
+export function inspectEnvelope(input) {
   if (!input || input.schemaVersion !== SCHEMA_VERSION) {
     throw new ProtocolError("invalid_schema_version");
   }
@@ -164,10 +180,7 @@ export function validateEnvelope(input) {
   if (!ALLOWED_EVENT_TYPES.has(input.eventType)) {
     throw new ProtocolError("invalid_event_type");
   }
-  if (input.eventType.startsWith("interview.") && input.namespace !== "interview") {
-    throw new ProtocolError("invalid_event_type");
-  }
-  if (input.eventType.startsWith("algorithm.") && input.namespace !== "algorithm") {
+  if (namespaceFor(input.eventType) !== input.namespace) {
     throw new ProtocolError("invalid_event_type");
   }
   if (typeof input.requestId !== "string" || !input.requestId.trim()) {
@@ -175,40 +188,38 @@ export function validateEnvelope(input) {
   }
   if (input.identity !== undefined && (input.identity === null || Array.isArray(input.identity)
     || typeof input.identity !== "object"
-    || Object.keys(input.identity).some((field) => field === "verified" ? input.identity.verified !== true : !["userId", "username"].includes(field))
-    || Object.keys(input.identity).length < 2 || Object.keys(input.identity).length > 3
-    || typeof input.identity.userId !== "string" || !input.identity.userId.trim()
-    || typeof input.identity.username !== "string" || !input.identity.username.trim())) {
-    throw new ProtocolError("invalid_identity");
-  }
-  if (input.eventType === "algorithm.learning.completed" && input.identity === undefined) {
+    || Object.keys(input.identity).some((field) => !IDENTITY_FIELDS.has(field))
+    || !nonEmptyString(input.identity.username)
+    || (input.identity.userId !== undefined && !uuid(input.identity.userId)))) {
     throw new ProtocolError("invalid_identity");
   }
   if (input.payload !== undefined && (input.payload === null || Array.isArray(input.payload) || typeof input.payload !== "object")) {
     throw new ProtocolError("invalid_payload");
   }
-  const allowedPayloadFields = PAYLOAD_FIELDS.get(input.eventType);
-  const payloadKeys = Object.keys(input.payload ?? {});
-  const payloadKeysWithoutBindingMarker = payloadKeys.filter((field) => field !== "verified");
-  if (!allowedPayloadFields || payloadKeysWithoutBindingMarker.length !== allowedPayloadFields.length
-    || payloadKeysWithoutBindingMarker.some((field) => !allowedPayloadFields.includes(field))
-    || (input.payload?.verified !== undefined && input.payload.verified !== true)) {
+  const schema = PAYLOAD_SCHEMA.get(input.eventType);
+  if (!schema) throw new ProtocolError("invalid_event_type");
+  const payload = input.payload ?? {};
+  const allowed = new Set([...schema.required, ...schema.optional]);
+  if (Object.keys(payload).some((field) => !allowed.has(field))
+    || schema.required.some((field) => payload[field] === undefined)) {
     throw new ProtocolError("invalid_payload");
   }
-  const payload = input.payload ?? {};
-  for (const field of ["userId"]) {
-    if (payload[field] !== undefined && !uuid(payload[field])) throw new ProtocolError("invalid_payload");
-  }
+  if (payload.userId !== undefined && !uuid(payload.userId)) throw new ProtocolError("invalid_payload");
   if (payload.username !== undefined && !nonEmptyString(payload.username)) throw new ProtocolError("invalid_payload");
-  if (input.eventType === "identity.create" && !nonEmptyString(payload.username)) throw new ProtocolError("invalid_payload");
-  if (input.eventType === "identity.verify" && (!uuid(payload.userId) || !nonEmptyString(payload.username))) throw new ProtocolError("invalid_payload");
-  if (input.eventType === "interview.session.load" && (!SESSION_ID.test(payload.sessionId))) throw new ProtocolError("invalid_payload");
-  if (["interview.session.completed", "interview.review.completed", "algorithm.learning.completed"].includes(input.eventType)) {
-    validateEventForBoundary(payload.event, input.eventType);
-    if (["interview.session.completed", "interview.review.completed"].includes(input.eventType)
-      && (payload.event.userId !== payload.userId || payload.event.username !== payload.username)) throw new ProtocolError("invalid_event");
-    if (input.eventType === "algorithm.learning.completed"
-      && (input.identity?.userId !== payload.event.userId || input.identity?.username !== payload.event.username)) throw new ProtocolError("invalid_event");
-  }
+  if (input.eventType === "system.user-registered" && !nonEmptyString(payload.displayName)) throw new ProtocolError("invalid_payload");
+  if (input.eventType === "system.legacy-migration-requested" && !LEGACY_MODES.has(payload.mode)) throw new ProtocolError("invalid_payload");
+  if (input.eventType === "interview.session.load" && !SESSION_ID.test(payload.sessionId)) throw new ProtocolError("invalid_payload");
   return structuredClone(input);
+}
+
+export function hasEventPayload(eventType) {
+  return Boolean(PAYLOAD_SCHEMA.get(eventType)?.required.includes("event"));
+}
+
+export function validateEnvelope(input) {
+  const envelope = inspectEnvelope(input);
+  if (hasEventPayload(envelope.eventType)) {
+    validateEventForBoundary(envelope.payload.event, envelope.eventType);
+  }
+  return envelope;
 }
