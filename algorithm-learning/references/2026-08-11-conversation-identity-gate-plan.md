@@ -1,5 +1,7 @@
 # 对话级身份门禁与即时画像更新计划书
 
+> **Archived / superseded.** 本文是规范化之前的历史实施计划；其中的路径与流程属于历史状态，MUST NOT be used for writes。当前契约见 [algorithm-profile-contract.md](algorithm-profile-contract.md)。
+
 ## 目标
 
 保留原有的中文算法讲解、渐进提示、最小修改、复杂度分析和专项检查；新增强制的对话级身份绑定与每次学习后的即时画像更新。所有学习数据存放在 Google Drive 的 `algorithm/` 下，用户数据以 UUID `userId` 隔离，`username` 仅用于用户选择和二次校验。

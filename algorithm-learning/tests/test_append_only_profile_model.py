@@ -1,3 +1,4 @@
+import unicodedata
 import unittest
 
 
@@ -92,16 +93,29 @@ def select_or_rebuild_snapshot(events, snapshots):
     return rebuild_snapshot(kept)
 
 
-def resolve_username(username, registrations):
+def normalize_name(raw_name):
+    """Names are only normalised mechanically: NFKC plus surrounding whitespace."""
+    if not isinstance(raw_name, str):
+        return ""
+    return unicodedata.normalize("NFKC", raw_name).strip()
+
+
+def resolve_name_key(raw_name, registrations):
+    """Return the single active userId for a name, or stop on ambiguity."""
+    name_key = normalize_name(raw_name)
+    if not name_key:
+        return "invalid_display_name"
     matches = [
         registration
         for registration in registrations
-        if registration.get("username") == username
+        if normalize_name(registration.get("username")) == name_key
         and registration.get("status") == "active"
     ]
-    if len(matches) != 1:
-        return "username_conflict"
-    return matches[0]["userId"]
+    if len(matches) == 1:
+        return matches[0]["userId"]
+    if not matches:
+        return "user_not_found"
+    return "username_conflict"
 
 
 class AppendOnlyProfileModelTests(unittest.TestCase):
@@ -154,7 +168,31 @@ class AppendOnlyProfileModelTests(unittest.TestCase):
             {"userId": USER_ID, "username": USERNAME, "status": "active"},
             {"userId": "different-user", "username": USERNAME, "status": "active"},
         ]
-        self.assertEqual("username_conflict", resolve_username(USERNAME, registrations))
+        self.assertEqual("username_conflict", resolve_name_key(USERNAME, registrations))
+
+    def test_name_normalization_is_only_nfkc_and_trim(self):
+        self.assertEqual("Ada", normalize_name("  Ａda  "))
+        self.assertEqual("Ada", normalize_name("Ada"))
+        self.assertEqual("", normalize_name("   "))
+        self.assertEqual("", normalize_name(None))
+
+    def test_name_resolution_is_idempotent_across_normalized_forms(self):
+        registrations = [{"userId": USER_ID, "username": "乔炳源", "status": "active"}]
+        self.assertEqual(USER_ID, resolve_name_key("乔炳源", registrations))
+        self.assertEqual(USER_ID, resolve_name_key(" 乔炳源 ", registrations))
+
+    def test_distinct_names_resolve_to_distinct_users(self):
+        registrations = [
+            {"userId": USER_ID, "username": "张三", "status": "active"},
+            {"userId": "different-user", "username": "李四", "status": "active"},
+        ]
+        self.assertEqual(USER_ID, resolve_name_key("张三", registrations))
+        self.assertEqual("different-user", resolve_name_key("李四", registrations))
+
+    def test_unknown_and_blank_names_stop_resolution(self):
+        registrations = [{"userId": USER_ID, "username": USERNAME, "status": "active"}]
+        self.assertEqual("user_not_found", resolve_name_key("陌生人", registrations))
+        self.assertEqual("invalid_display_name", resolve_name_key("", registrations))
 
 
 if __name__ == "__main__":
