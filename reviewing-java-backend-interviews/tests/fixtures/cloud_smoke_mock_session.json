@@ -1,10 +1,38 @@
 {
-  "schema_version": "1.0",
-  "session_id": "MOCK-20260806-001",
-  "candidate_id": "TEST-20260806-001",
-  "source_type": "mock_interview",
-  "evidence_type": "system_transcript",
-  "evidence_confidence": 0.6,
-  "questions": [],
-  "state": "review_pending"
+  "schemaVersion": "1.2",
+  "eventId": "4b1f0f2e-6f70-4f4c-9a6d-1f0a2b3c4d5e",
+  "eventKey": "smoke-user:interview:session:MOCK-20260806-001",
+  "eventType": "interview.session.completed",
+  "userId": "9c2e6a10-3f7d-4a1b-9c5e-7d8f0a1b2c3d",
+  "username": "云端烟测用户",
+  "sessionId": "MOCK-20260806-001",
+  "interviewType": "mock",
+  "domain": "java-backend",
+  "startedAt": "2026-08-06T01:00:00Z",
+  "completedAt": "2026-08-06T01:40:00Z",
+  "status": "review_pending",
+  "resumeContext": {
+    "used": true,
+    "source": "虚构简历；仅用于隔离验证",
+    "claims": ["claim-smoke-redis-cache"]
+  },
+  "questions": [
+    {
+      "questionId": "Q-001",
+      "domain": "java-backend",
+      "sourceTags": ["resume"],
+      "topicTags": ["redis", "cache-consistency"],
+      "resumeClaimIds": ["claim-smoke-redis-cache"],
+      "weaknessId": null,
+      "originalQuestion": "项目里如何保证缓存与数据库的一致性？",
+      "originalAnswer": "先删缓存再更新数据库。",
+      "followUps": [
+        {"question": "并发下这个顺序会产生什么问题？", "answer": "可能会出现脏读。"}
+      ],
+      "timeline": [
+        {"at": "2026-08-06T01:05:00Z", "kind": "question"},
+        {"at": "2026-08-06T01:09:00Z", "kind": "answer"}
+      ]
+    }
+  ]
 }

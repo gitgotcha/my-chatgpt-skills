@@ -1,26 +1,29 @@
 ---
 name: reviewing-java-backend-interviews
-description: Use when reviewing a verified mock or real interview through one immutable submit_event handoff, with local JSON and Word output.
+description: Use when reviewing a mock or real interview for a user resolved by display name, through one immutable submit_event handoff with local JSON and Word output.
 ---
 
 # Java 后端面试复盘
 
-本 Skill 负责跨对话身份确认、历史会话选择、逐题复盘、结构化画像变化和本地报告生成。所有远端交互只能使用唯一的 `submit_event` MCP 工具；本 Skill 不调用其他远端工具，也不把本地报告作为画像输入。
+本 Skill 负责按姓名解析用户、历史会话选择、逐题复盘、结构化画像变化和本地报告生成。所有远端交互只能使用唯一的 `submit_event` MCP 工具；本 Skill 不调用其他远端工具，也不把本地报告作为画像输入。
 
-## 新对话身份门禁
+所有云端数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。复盘事件由 Worker 追加到 `users/<userId>/interview/events/`，画像快照由 Worker 物化到 `users/<userId>/interview/profile/snapshots/`；本 Skill 只生成事件内容，不直接写 Drive。
 
-每次新对话都从身份门禁开始，不沿用上一段对话的身份：
+## 按姓名解析用户
 
-1. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "interview"`、`eventType: "identity.list"`。
-2. 展示最小身份选项：`A` 选择已有身份，或 `B` 创建新用户。
-3. 选择 A 时要求用户提供 `userId` 和姓名，再调用 `identity.verify`；选择 B 时仅询问姓名，再调用 `identity.create`。
-4. 只有收到 `{userId, username, verified: true}` 后，才允许读取会话摘要或会话详情。本轮绑定只在当前对话有效；用户切换身份时重新执行门禁。
+每次新对话都重新解析身份，不沿用上一段对话的身份：
 
-身份失败或远端状态不是 `ok` 时暂停后续读取与写入，并如实说明尚未持久化。
+1. 先取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
+2. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "system"`、`eventType: "system.user-registered"`，payload 为 `{displayName: "<姓名>"}`。注册阶段按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表。
+3. 命中唯一用户时返回已有 `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，不自动合并、不静默挑选。
+4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才允许读取会话摘要或会话详情。
+5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：解析与注册由 `submit_event` 在一次调用内完成。本轮绑定只在当前对话有效；用户切换身份时重新按姓名解析。
+
+身份解析失败或远端状态不是 `ok` 时暂停后续读取与写入，并如实说明尚未持久化。
 
 ## 会话读取与复盘
 
-身份验证成功后依次调用：
+身份解析成功后依次调用：
 
 1. `submit_event(interview.session.list)`，只展示时间、领域、类型和复盘状态摘要。
 2. 用户选择会话后调用 `submit_event(interview.session.load)`，读取目标 schema-1.2 会话及有效复盘事件。
@@ -32,7 +35,7 @@ description: Use when reviewing a verified mock or real interview through one im
 
 ## 唯一提交与本地输出
 
-构造完整 `interview.review.completed` JSON 后只调用一次 `submit_event`。响应包含真实回执时记录 `persistenceStatus: "ok"`；写入失败仍生成本地 JSON 并标记 `cloud_persistence_pending`，不得假称远端已保存。事件已保存但画像缓存失败时标记 `profile_cache_pending`。
+构造完整 `interview.review.completed` JSON 后只调用一次 `submit_event`。响应包含真实回执时记录 `persistenceStatus: "ok"`；写入失败仍生成本地 JSON 并标记 `cloud_persistence_pending`，不得假称远端已保存。事件已保存但画像快照失败时标记 `profile_cache_pending`。
 
 本地复盘文件统一保存为：
 
@@ -41,4 +44,4 @@ outputs/interview/<userId>/interview-<sessionId>-report.json
 outputs/interview/<userId>/interview-<sessionId>-report.docx
 ```
 
-先用 `save_review_json` 写完整事件副本，再以该 JSON 作为 `create_review_report(report_json, report_docx)` 的唯一输入生成 Word，并执行渲染检查。Word 生成失败不回滚 JSON 或已提交事件；明确说明失败原因并保留可重试文件。
+本地报告只保留为本地派生输出，不上传云端，也永不作为画像输入。先用 `save_review_json` 写完整事件副本，再以该 JSON 作为 `create_review_report(report_json, report_docx)` 的唯一输入生成 Word，并执行渲染检查。Word 生成失败不回滚 JSON 或已提交事件；明确说明失败原因并保留可重试文件。
