@@ -362,7 +362,7 @@ git commit -m "docs: normalize algorithm learning persistence contract"
 - [ ] 运行并确认旧身份门禁文本导致失败：
 
 ```bash
-python -m unittest discover -s conducting-java-backend-mock-interviews/tests -v
+(cd conducting-java-backend-mock-interviews && python -m unittest discover -s tests -v)
 ```
 
 - [ ] 重写模拟面试身份段：输入姓名，`submit_event` 返回或创建用户；会话事件落入 `users/<userId>/interview/events/`。保留“一次只问一道”“原回答不可改写”“会话不更新画像”和本地副本规则。
@@ -376,7 +376,7 @@ python -m unittest discover -s conducting-java-backend-mock-interviews/tests -v
 - [ ] 运行：
 
 ```bash
-python -m unittest discover -s conducting-java-backend-mock-interviews/tests -v
+(cd conducting-java-backend-mock-interviews && python -m unittest discover -s tests -v)
 ```
 
 - [ ] Commit:
@@ -412,7 +412,7 @@ git commit -m "docs: normalize mock interview identity and storage contracts"
 - [ ] 运行并确认 legacy validation/reducer 测试失败：
 
 ```bash
-python -m unittest discover -s reviewing-java-backend-interviews/tests -v
+(cd reviewing-java-backend-interviews && python -m unittest discover -s tests -v)
 ```
 
 - [ ] 保留 `interview_core.py` 的 schema-1.2 `create_review_event`、`save_review_json`、题源/领域纯函数；删除不再被当前 Skill 使用的 schema-1.0 CandidateProfile validator、乐观 current-profile 更新和 `candidate_id` reducer。画像 reducer 的唯一活动实现是 Worker 的 `profile-model.js`。
@@ -428,8 +428,8 @@ python -m unittest discover -s reviewing-java-backend-interviews/tests -v
 - [ ] 运行：
 
 ```bash
-python -m unittest discover -s reviewing-java-backend-interviews/tests -v
-python -m unittest discover -s conducting-java-backend-mock-interviews/tests -v
+(cd reviewing-java-backend-interviews && python -m unittest discover -s tests -v)
+(cd conducting-java-backend-mock-interviews && python -m unittest discover -s tests -v)
 rg -n 'system/candidate_index|candidates/<candidate_id>|profile/current_profile|candidate_id' \
   reviewing-java-backend-interviews \
   -g '!references/2026-08-06-unified-interview-system-implementation-plan.md'
@@ -698,8 +698,8 @@ python -m unittest tests/test_repository_storage_contract.py -v
 cd cloud-mcp && npm test
 cd ..
 python -m unittest discover -s algorithm-learning/tests -v
-python -m unittest discover -s conducting-java-backend-mock-interviews/tests -v
-python -m unittest discover -s reviewing-java-backend-interviews/tests -v
+(cd conducting-java-backend-mock-interviews && python -m unittest discover -s tests -v)
+(cd reviewing-java-backend-interviews && python -m unittest discover -s tests -v)
 python -m unittest discover -s java-knowledge-based-on-resume-learn-skill/tests -v
 python -m unittest tests/test_repository_storage_contract.py -v
 ```
