@@ -504,3 +504,22 @@ Cloud MCP：
 - 未执行任何破坏性 Drive 操作。
 
 达到以上门槛后，才提交并推送完整实现。
+
+## 16. 实现命名补充（实现期决定）
+
+第 10 节的评分维度只给出了中文名与权重，未规定事件中使用的英文字段名。为了保持 JSON 事件可校验，实现采用如下机械转写，并在 `cloud-mcp/src/resume-knowledge-model.js` 的 `SCORE_DIMENSIONS` 中集中冻结权重，改名只需改一处：
+
+| 中文维度 | 事件字段名 | 权重 |
+| --- | --- | --- |
+| 技术正确性 | `correctness` | 40 |
+| 关键点完整性 | `completeness` | 25 |
+| 回答链路与层次 | `structure` | 20 |
+| 简历场景结合度 | `resumeRelevance` | 15 |
+
+`answer-scored` 事件的 `scores` 只接受这四个字段，每个分数不得为负且不得超过该维度权重，四者之和必须等于 `total`。
+
+同理，`resume-knowledge.*` 系列事件中未在第 6 节逐一列出的字段按以下约定命名：`resumeVersion`、`fingerprint`、`questionKey`、`masteryScore`、`localDate`、`planId`、`slot`，以及题目上的 `knowledgePointId`。证据等级字段名是 `evidence`，取值为 `explicit`、`strong-inference`（同时接受 `strong_inference`）或 `unsupported`；题型字段名是 `type`，取值为 `scenario` 或 `principle`。
+
+`questionKey` 必须在语义上稳定，不得随题面措辞或顺序变化而改变，否则跨日掌握度无法累积。`rejected` 不是简历证据等级，而是用户否认某条声明后该声明进入的状态，字段名是 `status`。
+
+本补充只固化已实现的命名，不引入新的行为要求。若后续要改用其它字段名，应在此处同步修订。

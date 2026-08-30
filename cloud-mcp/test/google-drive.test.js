@@ -169,3 +169,42 @@ test("listJson returns only JSON children with their Drive metadata", async () =
   const files = await repository.listJson("events-folder");
   assert.deepEqual(files, [{ id: "event-1", name: "event-a.json", mimeType: "application/json", parents: ["events-folder"], createdTime: "2026-08-14T00:00:00.000Z" }]);
 });
+
+test("createJson accepts every canonical projection filename", async () => {
+  const names = [
+    "identity.json",
+    "registration-11111111-1111-4111-8111-111111111111.json",
+    "event-11111111-1111-4111-8111-111111111111.json",
+    "snapshot-2026-08-29T00-00-00-000Z-11111111-1111-4111-8111-111111111111.json",
+    "daily-plan-2026-08-29-11111111-1111-4111-8111-111111111111.json",
+    "resume-v1-0123456789abcdef.json",
+    "question-bank-v1-11111111-1111-4111-8111-111111111111.json",
+    "migration-2026-08-29-dry-run.json"
+  ];
+  for (const name of names) {
+    const repository = createDriveRepository(env, {
+      uploadFile: async () => ({ id: "created-file" }),
+      readJsonFile: async (id) => ({ id, name, parents: ["events-folder"], value: { schemaVersion: "1.2" } })
+    });
+    await repository.createJson("events-folder", name, { schemaVersion: "1.2" });
+  }
+});
+
+test("createJson still rejects traversal, separators and unlisted filenames", async () => {
+  const repository = createDriveRepository(env, {
+    uploadFile: async () => { throw new Error("must not write"); }
+  });
+  for (const name of [
+    "../identity.json",
+    "identity.json.bak",
+    "notes.txt",
+    "event-../nested.json",
+    "daily-plan-2026-8-29-plan.json",
+    "unknown-projection.json"
+  ]) {
+    await assert.rejects(
+      () => repository.createJson("events-folder", name, { schemaVersion: "1.2" }),
+      /invalid JSON target/
+    );
+  }
+});

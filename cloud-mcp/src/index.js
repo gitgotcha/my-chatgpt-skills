@@ -3,7 +3,7 @@ import { dispatchSubmitEvent } from "./submit-event.js";
 
 const tools = [{
   name: "submit_event",
-  description: "Submit a validated interview or algorithm event.",
+  description: "Submit a validated system, interview, algorithm or resume-knowledge event. The caller supplies a display name; the Worker resolves or registers the stable userId.",
   inputSchema: {
     type: "object",
     additionalProperties: false,
@@ -12,11 +12,13 @@ const tools = [{
       schemaVersion: { type: "string" },
       namespace: { type: "string" },
       eventType: { type: "string" },
+      // userId is optional: the Worker resolves it from the display name and
+      // only rejects the call when a supplied userId contradicts the registry.
       identity: {
         type: "object",
         additionalProperties: false,
-        required: ["userId", "username"],
-        properties: { userId: { type: "string" }, username: { type: "string" }, verified: { type: "boolean" } }
+        required: ["username"],
+        properties: { userId: { type: "string" }, username: { type: "string" } }
       },
       // Event payloads are deliberately open at the MCP description layer.
       // The Worker applies the event-type-specific schema before dispatching.

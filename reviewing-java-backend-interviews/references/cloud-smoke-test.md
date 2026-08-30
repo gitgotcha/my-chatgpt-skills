@@ -1,12 +1,21 @@
 # 隔离云端烟测
 
-状态：**未验证**。本地 `LocalTestStore` 仅是测试替身；不得以本地模拟替代真实云端成功。
+状态：**未验证**。fake Drive 与临时目录只是测试替身；不得以本地模拟替代真实云端成功。
 
 只有运行时提供可用的 Google Drive 连接器与用户确认的根目录时才执行本清单。否则不发起任何写入，保留原始会话并返回 `cloud_persistence_pending` 或 `review_pending`。
 
-1. 在独立的系统目录中创建唯一的 `TEST-*` 候选人，不读取或修改真实候选人。
-2. 记录本次创建的 CandidateIndex 条目、简历原文件和解析结果、`MOCK-*`/`REAL-*` 会话、原始转写、Review JSON、事件 JSON、画像历史、DOCX 与导出文件的完整路径。
-3. 验证模拟会话交接、统一复盘、自动画像应用和下一轮读取同一领域指导。
-4. 验证真实会话的待确认、确认应用和拒绝不应用三种状态。
-5. 验证 Markdown、JSON 和 DOCX 都能从云端下载。
-6. 只清理本次清单中明确创建的 `TEST-*` 文件；任何目标不明确时停止清理。
+1. 使用完全虚构的隔离姓名注册测试用户，取得独立的 `userId`，不读取或修改真实用户数据。
+2. 记录本次创建的规范路径与本地副本的完整路径：
+
+   ```text
+   users/<userId>/interview/events/event-<eventId>.json
+   users/<userId>/interview/profile/snapshots/snapshot-<UTC>-<headEventId>.json
+   outputs/interview/<userId>/interview-<sessionId>-report.json
+   outputs/interview/<userId>/interview-<sessionId>-report.docx
+   ```
+
+3. 验证 `MOCK-*` 会话交接、统一复盘、自动画像应用和下一轮读取同一领域指导。
+4. 验证 `REAL-*` 会话的待确认、确认应用和拒绝不应用三种状态。
+5. 验证事件 JSON 与快照 JSON 都能从规范目录读回，父目录与内容哈希均匹配。
+6. 验证本地 DOCX 可从本地副本渲染；本地报告不上传云端。
+7. 只清理本次清单中明确创建的文件；任何目标不明确时停止清理。旧 namespace 目录只读，不得移动、覆盖或删除。

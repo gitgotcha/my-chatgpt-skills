@@ -10,7 +10,7 @@ function eventVersionMatchesKey(event) {
   return Boolean(match) && Number(match[1]) === event.reviewVersion;
 }
 
-export function createInterviewStore({ eventStore, drive, now = () => new Date().toISOString() }) {
+export function createInterviewStore({ eventStore, drive, layout, now = () => new Date().toISOString() }) {
   if (!eventStore?.appendEvent || !eventStore?.listVerifiedEvents) throw new Error("invalid_interview_store");
 
   async function events(identity) {
@@ -44,12 +44,9 @@ export function createInterviewStore({ eventStore, drive, now = () => new Date()
   }
 
   async function createSnapshot(identity, snapshot) {
-    if (!drive?.rootFolderId || !drive.ensureFolder || !drive.createJson || !drive.readJson) throw new Error("snapshot_store_unavailable");
-    const interview = await drive.ensureFolder(drive.rootFolderId, "interview");
-    const users = await drive.ensureFolder(interview.id, "users");
-    const user = await drive.ensureFolder(users.id, identity.userId);
-    const profile = await drive.ensureFolder(user.id, "profile");
-    const snapshots = await drive.ensureFolder(profile.id, "snapshots");
+    if (!drive?.createJson || !drive.readJson) throw new Error("snapshot_store_unavailable");
+    if (!layout?.ensureDomainPath) throw new Error("snapshot_store_unavailable");
+    const snapshots = await layout.ensureDomainPath(identity.userId, "interview", ["profile", "snapshots"]);
     const safeTime = String(snapshot.generatedAt).replace(/[:.]/g, "-");
     const name = `snapshot-${safeTime}-${snapshot.headEventId ?? "00000000-0000-4000-8000-000000000000"}.json`;
     const created = await drive.createJson(snapshots.id, name, snapshot);

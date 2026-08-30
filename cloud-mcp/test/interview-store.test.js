@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInterviewStore } from "../src/interview-store.js";
+import { createStorageLayout } from "../src/storage-layout.js";
 
 const identity = { userId: "00000000-0000-4000-8000-000000000001", username: "Ada" };
 const otherIdentity = { userId: "00000000-0000-4000-8000-000000000002", username: "Grace" };
@@ -24,6 +25,93 @@ function setup() {
   };
   return createInterviewStore({ eventStore });
 }
+
+function fakeDrive() {
+  const folders = new Map([["root", { id: "root", name: "root", parents: [] }]]);
+  const files = new Map();
+  const createdJsonFiles = [];
+  let number = 0;
+  const children = (parentId, name) => [...folders.values()]
+    .filter((folder) => folder.parents[0] === parentId && (!name || folder.name === name));
+  return {
+    rootFolderId: "root",
+    folders,
+    files,
+    createdJsonFiles,
+    async findFolder(parentId, name) { return children(parentId, name)[0] ?? null; },
+    async ensureFolder(parentId, name) {
+      const found = children(parentId, name)[0];
+      if (found) return found;
+      const folder = { id: `folder-${++number}`, name, parents: [parentId] };
+      folders.set(folder.id, folder);
+      return folder;
+    },
+    async listJson(parentId) { return [...files.values()].filter((file) => file.parents[0] === parentId); },
+    async createJson(parentId, name, value) {
+      const file = { id: `file-${++number}`, name, parents: [parentId], mimeType: "application/json", value: structuredClone(value) };
+      files.set(file.id, file);
+      createdJsonFiles.push(file);
+      return structuredClone(file);
+    },
+    async readJson(id) { return structuredClone(files.get(id)); }
+  };
+}
+
+function ancestryOf(drive, file) {
+  const names = [file.name];
+  let parentId = file.parents[0];
+  while (parentId && parentId !== "root") {
+    const parent = drive.folders.get(parentId) ?? drive.files.get(parentId);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parents?.[0];
+  }
+  return names;
+}
+
+function persistedSetup(events) {
+  const drive = fakeDrive();
+  const layout = createStorageLayout({ drive });
+  const eventStore = {
+    appendEvent: async (_requestedIdentity, value) => ({ event: value, receipt: { fileId: "event-file", eventKey: value.eventKey, eventId: value.eventId } }),
+    listVerifiedEvents: async () => structuredClone(events)
+  };
+  return { drive, store: createInterviewStore({ eventStore, drive, layout }) };
+}
+
+function reviewEvent(overrides = {}) {
+  return {
+    ...session,
+    eventId: "10000000-0000-4000-8000-000000000010",
+    eventKey: `${identity.userId}:interview:review:MOCK-1:v1`,
+    eventType: "interview.review.completed",
+    reviewVersion: 1,
+    sourceSessionEventId: session.eventId,
+    applyProfileChanges: true,
+    profileChanges: [],
+    ...overrides
+  };
+}
+
+test("review events materialize the snapshot below the canonical user root", async () => {
+  const review = reviewEvent();
+  const { drive, store } = persistedSetup([session, review]);
+  const result = await store.submitReview(identity, review);
+  assert.equal(result.status, "ok");
+
+  const snapshots = drive.createdJsonFiles.filter((file) => file.name.startsWith("snapshot-"));
+  assert.equal(snapshots.length, 1);
+  assert.deepEqual(ancestryOf(drive, snapshots[0]), [
+    "my-chatGPT-skills", "users", identity.userId, "interview", "profile", "snapshots", snapshots[0].name
+  ]);
+  assert.equal(result.data.snapshotReceipt.fileId, snapshots[0].id);
+});
+
+test("session events never create a profile snapshot", async () => {
+  const { drive, store } = persistedSetup([session]);
+  await store.submitSession(identity, session);
+  assert.deepEqual(drive.createdJsonFiles.filter((file) => file.name.startsWith("snapshot-")), []);
+});
 
 test("one user cannot load another user's session", async () => {
   await assert.rejects(() => setup().loadSession(otherIdentity, session.sessionId), /not_found/);

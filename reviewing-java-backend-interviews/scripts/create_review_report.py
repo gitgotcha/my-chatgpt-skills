@@ -1,4 +1,4 @@
-"""Create a Word report for a Java backend real-interview review."""
+"""Create a local Word report from one persisted schema-1.2 review JSON."""
 
 from __future__ import annotations
 
@@ -89,51 +89,6 @@ def _value(document: Document, value: object) -> None:
         document.add_paragraph(str(value))
 
 
-def _scores(document: Document, values: object) -> None:
-    table = document.add_table(rows=1, cols=3)
-    table.style = "Table Grid"
-    for cell, title in zip(table.rows[0].cells, ("维度", "得分", "评价"), strict=True):
-        cell.text = title
-    if isinstance(values, list):
-        for item in values:
-            if not isinstance(item, dict):
-                continue
-            cells = table.add_row().cells
-            cells[0].text = str(item.get("dimension", "未命名维度"))
-            cells[1].text = str(item.get("score", "未评分"))
-            cells[2].text = str(item.get("comment", "未提供"))
-
-
-def _questions(document: Document, questions: object) -> None:
-    if not isinstance(questions, list) or not questions:
-        document.add_paragraph("本场未记录可复盘的问题。")
-        return
-    for index, item in enumerate(questions, start=1):
-        if not isinstance(item, dict):
-            continue
-        document.add_heading(f"{index}. {item.get('question', '未记录问题')}", level=2)
-        for label, key in (
-            ("用户现场回答", "live_answer"),
-            ("事后补充（不计入现场表现）", "retrospective_answer"),
-            ("面试官追问", "followups"),
-            ("记录可信度", "confidence"),
-            ("考察意图", "interviewer_intent"),
-            ("考察维度", "assessment_dimensions"),
-            ("技术正确性", "correctness"),
-            ("回答评价", "evaluation"),
-            ("主要错误与遗漏", "errors_and_omissions"),
-            ("标准答案", "standard_answer"),
-            ("推荐口述版本", "spoken_answer"),
-            ("表达分析", "expression_analysis"),
-            ("下一层追问", "next_followups"),
-            ("推荐复测方式", "retest"),
-        ):
-            paragraph = document.add_paragraph()
-            run = paragraph.add_run(f"{label}：")
-            _font(run, bold=True)
-            paragraph.add_run(str(item.get(key, "未提供")))
-
-
 def _schema12_report(document: Document, data: dict[str, object]) -> None:
     """Render only the persisted review JSON, without consulting a snapshot."""
     title = document.add_paragraph()
@@ -214,55 +169,20 @@ def _schema12_report(document: Document, data: dict[str, object]) -> None:
 
 
 def create_review_report(input_path: Path, output_path: Path) -> None:
+    """Render the persisted schema-1.2 review JSON and nothing else.
+
+    Legacy report shapes are not rendered here; reading an old report would need a
+    separately named read-only adapter, never a branch in the current save path.
+    """
     data = json.loads(input_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("review record JSON root must be an object")
-    if data.get("eventType") == "interview.review.completed" and data.get("schemaVersion") == "1.2":
-        document = Document()
-        _configure(document)
-        _schema12_report(document, data)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        document.save(output_path)
-        return
+    if data.get("eventType") != "interview.review.completed" or data.get("schemaVersion") != "1.2":
+        raise ValueError("review record must be a schemaVersion 1.2 interview.review.completed JSON")
+
     document = Document()
     _configure(document)
-    title = document.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title.paragraph_format.space_before = Pt(60)
-    title.paragraph_format.space_after = Pt(18)
-    run = title.add_run("Java 后端真实面试复盘报告")
-    _font(run, size=24, bold=True)
-    document.add_page_break()
-    _add_toc(document)
-
-    sections = (
-        ("一、面试基本信息", "basic_info"),
-        ("二、原始记录说明与可信度", "record_quality"),
-        ("三、综合评价", "overall_assessment"),
-        ("四、分项评分", "scores"),
-        ("五、主要优势", "strengths"),
-        ("六、主要失分原因", "loss_reasons"),
-        ("七、逐题复盘与纠错", "questions"),
-        ("八、面试官追问意图分析", "followup_intent"),
-        ("九、表达与逻辑分析", "expression_analysis"),
-        ("十、项目与简历风险", "project_risks"),
-        ("十一、算法表现", "algorithm_performance"),
-        ("十二、薄弱知识点清单", "knowledge_gaps"),
-        ("十三、能力画像变化", "profile_updates"),
-        ("十四、画像变化摘要", "profile_change_summary"),
-        ("十五、下一次模拟面试出题指南", "next_interview_guidance"),
-        ("十六、短期优化路线", "training_plan"),
-    )
-    if data.get("basic_info", {}).get("completed") is False:
-        document.add_paragraph("本次复盘资料不完整，结论仅基于已提供记录。")
-    for title, key in sections:
-        document.add_heading(title, level=1)
-        if key == "scores":
-            _scores(document, data.get(key))
-        elif key == "questions":
-            _questions(document, data.get(key))
-        else:
-            _value(document, data.get(key))
+    _schema12_report(document, data)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     document.save(output_path)
 
