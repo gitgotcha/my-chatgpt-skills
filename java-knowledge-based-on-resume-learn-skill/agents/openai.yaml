@@ -1,0 +1,7 @@
+interface:
+  display_name: "java-knowledge-based-on-resume-learn-skill"
+  short_description: "严格依据简历的 Java 后端八股逐题学习与每日练习，评分与掌握度只经 submit_event 持久化"
+  default_prompt: "Use $java-knowledge-based-on-resume-learn-skill to drill Java backend questions grounded strictly in my resume, with all progress persisted through submit_event."
+
+policy:
+  allow_implicit_invocation: true
