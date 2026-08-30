@@ -123,3 +123,38 @@ test("an invalid user id is refused", async () => {
 test("only the two historical domains are readable", () => {
   assert.deepEqual(LEGACY_DOMAINS, ["algorithm", "interview"]);
 });
+
+test("the legacy reader lists historical registrations", async () => {
+  const drive = fakeDrive();
+  const { registry } = await seedLegacy(drive, "algorithm", USER_ID);
+  await drive.createJson(registry.id, `registration-${USER_ID}.json`, {
+    schemaVersion: "1.2", status: "active", userId: USER_ID, username: "旧用户", createdAt: "2026-08-01T00:00:00.000Z"
+  });
+  const reader = createLegacyReader({ drive });
+  const records = await reader.registrations("algorithm");
+  assert.equal(records.length, 1);
+  assert.equal(records[0].userId, USER_ID);
+  assert.equal(records[0].username, "旧用户");
+});
+
+test("a registration is ignored when its name and payload disagree", async () => {
+  const drive = fakeDrive();
+  const { registry } = await seedLegacy(drive, "algorithm", USER_ID);
+  await drive.createJson(registry.id, `registration-${USER_ID}.json`, {
+    schemaVersion: "1.2",
+    userId: "99999999-9999-4999-8999-999999999999",
+    username: "另一个人"
+  });
+  // Files that are not registrations at all are skipped too.
+  await drive.createJson(registry.id, "notes.json", { userId: USER_ID });
+  const reader = createLegacyReader({ drive });
+  assert.deepEqual(await reader.registrations("algorithm"), []);
+});
+
+test("registrations are read-only and refuse unknown domains", async () => {
+  const drive = fakeDrive();
+  await seedLegacy(drive, "interview", USER_ID);
+  const reader = createLegacyReader({ drive });
+  assert.deepEqual(await reader.registrations("interview"), []);
+  await assert.rejects(() => reader.registrations("resume-knowledge"), /legacy_read_only/);
+});

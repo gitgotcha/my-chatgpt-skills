@@ -7,12 +7,17 @@ import { createLegacyReader } from "./legacy-reader.js";
 import { createInterviewStore } from "./interview-store.js";
 import { createAlgorithmStore } from "./algorithm-store.js";
 import { createResumeKnowledgeStore } from "./resume-knowledge-store.js";
+import { createMigrationStore } from "./migration-store.js";
 
 const DOMAIN_BY_NAMESPACE = new Map([
   ["algorithm", "algorithm"],
   ["interview", "interview"],
   ["resume-knowledge", "resume-knowledge"]
 ]);
+
+// Migration only reads the legacy roots and must stay side-effect free in
+// dry-run mode, so its identity is never resolved by create-on-demand.
+const READ_ONLY_IDENTITY_EVENTS = new Set(["system.legacy-migration-requested"]);
 
 const toProtocolError = (cause) => {
   if (cause instanceof ProtocolError) return cause;
@@ -31,6 +36,18 @@ async function bindIdentity(envelope, userStore) {
     throw new ProtocolError("invalid_display_name");
   }
   const preferredUserId = envelope.identity?.userId ?? envelope.payload?.userId;
+  // A read-only binding refuses to materialise a registration, so an unknown
+  // user is reported instead of silently created as a side effect.
+  if (READ_ONLY_IDENTITY_EVENTS.has(envelope.eventType)) {
+    if (!preferredUserId) throw new ProtocolError("invalid_identity");
+    try {
+      const checked = await userStore.verify({ userId: preferredUserId, displayName });
+      const { userId, displayName: name, nameKey } = checked.identity;
+      return { userId, username: name, displayName: name, nameKey, verified: true };
+    } catch (cause) {
+      throw toProtocolError(cause);
+    }
+  }
   try {
     const resolved = await userStore.resolveOrCreate({ displayName, preferredUserId });
     const { userId, displayName: name, nameKey } = resolved.identity;
@@ -80,12 +97,21 @@ export async function dispatchSubmitEvent(env, args, deps) {
     layout,
     drive
   });
+  const migrationStore = () => createMigrationStore({ legacyReader, layout, drive, userStore });
 
   const handlers = {
     "system.user-registered": async () => ({
       status: "ok",
       data: { registered: true, userId: identity.userId }
     }),
+    "system.legacy-migration-requested": (_env, { payload }) => (payload.mode === "dry-run"
+      ? migrationStore().plan(identity, { displayName: payload.displayName, domains: payload.domains })
+      : migrationStore().execute(identity, {
+        migrationId: payload.migrationId,
+        approvedPlanHash: payload.approvedPlanHash,
+        displayName: payload.displayName,
+        domains: payload.domains
+      })),
     "interview.session.list": async () => ({
       status: "ok",
       data: { sessions: await interviewStore().listSessions(identity) }

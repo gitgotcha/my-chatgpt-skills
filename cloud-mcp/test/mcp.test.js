@@ -134,6 +134,58 @@ test("submit_event rejects a path-like namespace", async () => {
   assert.match(payload.error.message, /invalid_namespace/);
 });
 
+test("submit_event rejects a migration request without an explicit mode", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "system",
+      eventType: "system.legacy-migration-requested",
+      payload: { displayName: "旧用户" },
+      requestId: "00000000-0000-4000-8000-000000000001"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_payload/);
+});
+
+test("submit_event rejects a migration domain that never held legacy data", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "system",
+      eventType: "system.legacy-migration-requested",
+      payload: { displayName: "旧用户", mode: "dry-run", domains: ["resume-knowledge"] },
+      requestId: "00000000-0000-4000-8000-000000000002"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_payload/);
+});
+
+test("submit_event rejects an execute migration that carries no approved plan hash", async () => {
+  const response = await handleRequest(request("tools/call", {
+    name: "submit_event",
+    arguments: {
+      schemaVersion: "1.2",
+      namespace: "system",
+      eventType: "system.legacy-migration-requested",
+      payload: {
+        displayName: "旧用户",
+        mode: "execute",
+        migrationId: "99999999-9999-4999-8999-000000000001"
+      },
+      requestId: "00000000-0000-4000-8000-000000000003"
+    }
+  }), env());
+  const payload = await response.json();
+  assert.equal(payload.error.code, -32602);
+  assert.match(payload.error.message, /invalid_payload/);
+});
+
 test("submit_event rejects an incomplete session payload", async () => {
   const response = await handleRequest(request("tools/call", {
     name: "submit_event",

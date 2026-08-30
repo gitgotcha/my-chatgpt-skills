@@ -22,10 +22,15 @@ export const ALLOWED_EVENT_TYPES = new Set([
 const ALLOWED_ENVELOPE_FIELDS = new Set(["schemaVersion", "namespace", "eventType", "identity", "payload", "requestId"]);
 const IDENTITY_FIELDS = new Set(["userId", "username"]);
 const LEGACY_MODES = new Set(["dry-run", "execute"]);
+// The migration can only ever carry data out of these pre-normalization roots.
+const LEGACY_MIGRATION_DOMAINS = new Set(["algorithm", "interview"]);
 const COMMON_OPTIONAL = ["userId", "username"];
 const PAYLOAD_SCHEMA = new Map([
   ["system.user-registered", { required: ["displayName"], optional: [...COMMON_OPTIONAL] }],
-  ["system.legacy-migration-requested", { required: ["displayName", "mode"], optional: [...COMMON_OPTIONAL, "domains"] }],
+  ["system.legacy-migration-requested", {
+    required: ["displayName", "mode"],
+    optional: [...COMMON_OPTIONAL, "domains", "migrationId", "approvedPlanHash"]
+  }],
   ["algorithm.learning.completed", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
   ["algorithm.daily-plan-created", { required: ["event"], optional: [...COMMON_OPTIONAL] }],
   ["interview.session.list", { required: [], optional: [...COMMON_OPTIONAL] }],
@@ -379,7 +384,18 @@ export function inspectEnvelope(input) {
   if (payload.userId !== undefined && !uuid(payload.userId)) throw new ProtocolError("invalid_payload");
   if (payload.username !== undefined && !nonEmptyString(payload.username)) throw new ProtocolError("invalid_payload");
   if (input.eventType === "system.user-registered" && !nonEmptyString(payload.displayName)) throw new ProtocolError("invalid_payload");
-  if (input.eventType === "system.legacy-migration-requested" && !LEGACY_MODES.has(payload.mode)) throw new ProtocolError("invalid_payload");
+  if (input.eventType === "system.legacy-migration-requested") {
+    if (!LEGACY_MODES.has(payload.mode)) throw new ProtocolError("invalid_payload");
+    if (payload.domains !== undefined && (!Array.isArray(payload.domains) || payload.domains.length === 0
+      || payload.domains.some((domain) => !LEGACY_MIGRATION_DOMAINS.has(domain)))) {
+      throw new ProtocolError("invalid_payload");
+    }
+    // execute without the approval of a concrete dry-run can copy blindly.
+    if (payload.mode === "execute"
+      && (!uuid(payload.migrationId) || !nonEmptyString(payload.approvedPlanHash))) {
+      throw new ProtocolError("invalid_payload");
+    }
+  }
   if (input.eventType === "interview.session.load" && !SESSION_ID.test(payload.sessionId)) throw new ProtocolError("invalid_payload");
   return structuredClone(input);
 }

@@ -92,6 +92,16 @@ async function call(drive, id, eventType, payload, { namespace, identity } = {})
   return JSON.parse(body.result.content[0].text);
 }
 
+async function callExpectingError(drive, id, eventType, payload, { namespace, identity } = {}) {
+  const response = await handleRequest(request(id, eventType, payload, namespace, identity), {
+    MCP_BEARER_TOKEN: "secret",
+    GOOGLE_DRIVE_FOLDER_ID: "root"
+  }, { drive });
+  const body = await response.json();
+  assert.ok(body.error, `expected a protocol error, got ${JSON.stringify(body)}`);
+  return body.error.message;
+}
+
 test("name registration, session, review, and snapshot share one resolved userId", async () => {
   const drive = fakeDrive();
   const name = "验收用户";
@@ -415,4 +425,167 @@ test("resume ingestion, question bank, daily plan and scoring share one canonica
   const namespaceScoped = [...drive.folders.values()]
     .filter((folder) => folder.parents?.length === 1 && folder.parents[0] === "root");
   assert.deepEqual(namespaceScoped.map((folder) => folder.name), ["my-chatGPT-skills"]);
+});
+
+// ----------------------------------------------------------- legacy migration
+
+const LEGACY_ALGORITHM_USER = "11111111-1111-4111-8111-111111111111";
+const LEGACY_INTERVIEW_USER = "22222222-2222-4222-8222-222222222222";
+
+async function seedLegacyNamespace(drive, { domain, userId, username, events, snapshots = [] }) {
+  const root = await drive.ensureFolder("root", domain);
+  const registry = await drive.ensureFolder(root.id, "user-registry");
+  const users = await drive.ensureFolder(root.id, "users");
+  const user = await drive.ensureFolder(users.id, userId);
+  const eventsFolder = await drive.ensureFolder(user.id, "events");
+  const profile = await drive.ensureFolder(user.id, "profile");
+  const snapshotsFolder = await drive.ensureFolder(profile.id, "snapshots");
+
+  await drive.createJson(registry.id, `registration-${userId}.json`, {
+    schemaVersion: "1.2",
+    status: "active",
+    userId,
+    username,
+    createdAt: "2026-08-01T00:00:00.000Z"
+  });
+  for (const eventId of events) {
+    await drive.createJson(eventsFolder.id, `event-${eventId}.json`, {
+      schemaVersion: "1.2",
+      eventId,
+      eventKey: `legacy:${eventId}`,
+      eventType: "algorithm.learning.completed",
+      userId,
+      username,
+      topic: "legacy-topic"
+    });
+  }
+  for (const [index, snapshot] of snapshots.entries()) {
+    await drive.createJson(
+      snapshotsFolder.id,
+      `snapshot-2026-08-0${index + 1}T00-00-00-000Z-${snapshot}.json`,
+      { schemaVersion: "1.2", headEventId: snapshot }
+    );
+  }
+}
+
+const legacyFiles = (drive) => [...drive.files.values()]
+  .filter((file) => ["algorithm", "interview"].includes(ancestryOf(drive, file)[0]))
+  .map((file) => ({ id: file.id, name: file.name, parent: file.parents[0], value: JSON.stringify(file.value) }))
+  .sort((left, right) => left.id.localeCompare(right.id));
+
+test("legacy migration runs through submit_event as an approved dry-run then execute", async () => {
+  const drive = fakeDrive();
+  const name = "迁移用户";
+
+  const registered = await call(drive, 30, "system.user-registered", { displayName: name }, { namespace: "system" });
+  const identity = registered.identity;
+
+  await seedLegacyNamespace(drive, {
+    domain: "algorithm",
+    userId: LEGACY_ALGORITHM_USER,
+    username: name,
+    events: ["b0000000-0000-4000-8000-000000000001", "b0000000-0000-4000-8000-000000000002"],
+    snapshots: ["b0000000-0000-4000-8000-000000000001"]
+  });
+  await seedLegacyNamespace(drive, {
+    domain: "interview",
+    userId: LEGACY_INTERVIEW_USER,
+    username: name,
+    events: ["b0000000-0000-4000-8000-000000000003"]
+  });
+
+  const legacyBefore = legacyFiles(drive);
+  const filesBefore = drive.files.size;
+
+  // A dry run reports everything and writes nothing at all.
+  const dryRun = await call(drive, 31, "system.legacy-migration-requested", {
+    displayName: name,
+    mode: "dry-run",
+    domains: ["algorithm", "interview"]
+  }, { namespace: "system", identity: { userId: identity.userId, username: name } });
+
+  assert.equal(dryRun.mode, "dry-run");
+  assert.equal(dryRun.summary.total, 4);
+  assert.equal(dryRun.summary.copy, 4);
+  assert.equal(dryRun.summary.conflict, 0);
+  assert.equal(drive.files.size, filesBefore);
+
+  // execute without an approved plan hash is refused at the protocol boundary.
+  assert.equal(await callExpectingError(drive, 32, "system.legacy-migration-requested", {
+    displayName: name,
+    mode: "execute",
+    migrationId: "99999999-9999-4999-8999-000000000001"
+  }, { namespace: "system", identity: { userId: identity.userId, username: name } }), "invalid_payload");
+
+  // A stale approval is refused instead of copying blind.
+  assert.equal(await callExpectingError(drive, 33, "system.legacy-migration-requested", {
+    displayName: name,
+    mode: "execute",
+    migrationId: "99999999-9999-4999-8999-000000000001",
+    approvedPlanHash: "stale-hash",
+    domains: ["algorithm"]
+  }, { namespace: "system", identity: { userId: identity.userId, username: name } }), "migration_plan_stale");
+
+  const executed = await call(drive, 34, "system.legacy-migration-requested", {
+    displayName: name,
+    mode: "execute",
+    migrationId: "99999999-9999-4999-8999-000000000001",
+    approvedPlanHash: dryRun.planHash,
+    domains: ["algorithm", "interview"]
+  }, { namespace: "system", identity: { userId: identity.userId, username: name } });
+
+  assert.equal(executed.mode, "execute");
+  assert.equal(executed.summary.copied, 4);
+  assert.equal(executed.receipt.migrationId, "99999999-9999-4999-8999-000000000001");
+  assert.equal(executed.receipt.userId, identity.userId);
+  assert.equal(executed.receiptFile.name, "migration-99999999-9999-4999-8999-000000000001-receipt.json");
+
+  // The legacy objects are byte-for-byte untouched and none of them moved.
+  assert.deepEqual(legacyFiles(drive), legacyBefore);
+
+  // Every copy landed under the single canonical user root, next to the receipt.
+  const copied = [...drive.files.values()]
+    .filter((file) => file.name.startsWith("event-") || file.name.startsWith("snapshot-"))
+    .filter((file) => ancestryOf(drive, file)[0] === "my-chatGPT-skills");
+  assert.equal(copied.length, 4);
+  for (const file of copied) {
+    const ancestry = ancestryOf(drive, file);
+    assert.deepEqual(ancestry.slice(0, 3), ["my-chatGPT-skills", "users", identity.userId]);
+    const domain = ancestry[3];
+    assert.ok(["algorithm", "interview"].includes(domain), ancestry.join("/"));
+    const segments = ancestry.slice(4, -1);
+    assert.deepEqual(segments.slice(0, 1), file.name.startsWith("event-") ? ["events"] : ["profile"]);
+  }
+
+  const receipt = [...drive.files.values()].find((file) => file.name.startsWith("migration-"));
+  assert.deepEqual(ancestryOf(drive, receipt), [
+    "my-chatGPT-skills", "users", identity.userId, receipt.name
+  ]);
+
+  // Replaying the same approved migration copies nothing new.
+  const replayed = await call(drive, 35, "system.legacy-migration-requested", {
+    displayName: name,
+    mode: "execute",
+    migrationId: "99999999-9999-4999-8999-000000000001",
+    approvedPlanHash: dryRun.planHash,
+    domains: ["algorithm", "interview"]
+  }, { namespace: "system", identity: { userId: identity.userId, username: name } });
+  assert.equal(replayed.summary.copied, 0);
+  assert.equal(replayed.summary.skip, 4);
+
+  // The migration never creates a namespace-scoped registry or users folder.
+  const namespaceScoped = [...drive.folders.values()]
+    .filter((folder) => folder.parents?.length === 1 && folder.parents[0] === "root")
+    .map((folder) => folder.name);
+  assert.ok(namespaceScoped.includes("my-chatGPT-skills"));
+  assert.deepEqual(namespaceScoped.filter((entry) => entry !== "my-chatGPT-skills"), ["algorithm", "interview"]);
+  for (const domain of ["algorithm", "interview"]) {
+    const legacyRoot = [...drive.folders.values()]
+      .find((folder) => folder.name === domain && folder.parents[0] === "root");
+    const children = [...drive.folders.values()]
+      .filter((folder) => folder.parents[0] === legacyRoot.id)
+      .map((folder) => folder.name)
+      .sort();
+    assert.deepEqual(children, ["user-registry", "users"]);
+  }
 });
