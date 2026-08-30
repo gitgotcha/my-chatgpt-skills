@@ -7,6 +7,7 @@ Read exactly one workflow before responding:
 - Java 后端模拟面试：`conducting-java-backend-mock-interviews/SKILL.md`
 - 面试记录复盘、报告或画像更新：`reviewing-java-backend-interviews/SKILL.md`
 - 简历驱动的 Java 后端八股学习与每日练习：`java-knowledge-based-on-resume-learn-skill/SKILL.md`
+- 儿童摄影后期（模板图学风格、选片、精修、统一色调）：`child-photoShop-skill/SKILL.md`
 
 ## Persistence contract
 
