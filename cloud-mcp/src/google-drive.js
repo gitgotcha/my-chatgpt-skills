@@ -95,7 +95,7 @@ const escapeDriveQuery = (value) => value.replaceAll("\\", "\\\\").replaceAll("'
 
 const driveFields = "id,name,mimeType,parents,createdTime";
 
-const JSON_TARGET = /^((identity)|(registration-[0-9a-f-]+)|(event-[0-9a-f-]+)|(snapshot-[0-9TZ:.-]+-[0-9a-f-]+)|(daily-plan-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-z-]+)|(resume-[0-9a-z-]+)|(question-bank-[0-9a-z-]+)|(migration-[0-9a-z-]+))\.json$/i;
+const JSON_TARGET = /^((identity)|(registration-[0-9a-f-]+)|(event-[0-9a-f-]+)|(snapshot-[0-9TZ:.-]+-[0-9a-f-]+)|(daily-plan-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-z-]+)|(resume-[0-9a-z._-]+)|(question-bank-[0-9a-z._-]+)|(migration-[0-9a-z-]+))\.json$/i;
 
 const validJsonTarget = (name) => typeof name === "string" && !/[\\/]/.test(name) && !name.includes("..")
   && JSON_TARGET.test(name);

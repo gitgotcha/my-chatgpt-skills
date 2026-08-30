@@ -200,3 +200,219 @@ test("name registration, session, review, and snapshot share one resolved userId
     drive.files.get([...drive.files.values()].find((file) => file.name === "identity.json").id).parents[0]
   ).parents[0]).name, "users");
 });
+
+function ancestryOf(drive, file) {
+  const names = [file.name];
+  let parentId = file.parents[0];
+  while (parentId && parentId !== "root") {
+    const parent = drive.folders.get(parentId) ?? drive.files.get(parentId);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parents?.[0];
+  }
+  return names;
+}
+
+const RESUME_VERSION = "resume-2026-08-30-a";
+const RESUME_FINGERPRINT = "sha256-def456";
+const QUESTION_KEY = "redis-cache-penetration";
+
+function bankQuestion(overrides = {}) {
+  return {
+    questionKey: QUESTION_KEY,
+    knowledgePointId: "redis",
+    evidence: "explicit",
+    type: "principle",
+    prompt: "什么是缓存穿透？如何解决？",
+    answerChain: ["定义", "核心机制", "关键流程"],
+    scoringPoints: ["布隆过滤器", "空值缓存"],
+    referenceAnswer: "缓存穿透指查询不存在的数据……",
+    resumeEvidenceRefs: ["claim-redis"],
+    conditional: false,
+    confirmed: false,
+    masteryScore: null,
+    lastScoredLocalDate: null,
+    ...overrides
+  };
+}
+
+function answerScored({ userId, username, localDate, total, id }) {
+  const ratio = total / 100;
+  return {
+    schemaVersion: "1.2",
+    eventId: id,
+    eventKey: `${userId}:answer:${localDate}:${QUESTION_KEY}:${id}`,
+    eventType: "resume-knowledge.answer-scored",
+    userId,
+    username,
+    questionKey: QUESTION_KEY,
+    localDate,
+    resumeVersion: RESUME_VERSION,
+    scoredAt: `${localDate}T02:00:00.000Z`,
+    scores: {
+      correctness: 40 * ratio,
+      completeness: 25 * ratio,
+      structure: 20 * ratio,
+      resumeRelevance: 15 * ratio
+    },
+    total,
+    feedback: {
+      strengths: ["说出了布隆过滤器"],
+      issues: ["遗漏空值缓存"],
+      issueCategories: ["关键点遗漏"],
+      answerChain: ["定义", "核心机制", "关键流程"],
+      referenceAnswer: "缓存穿透指查询不存在的数据……"
+    }
+  };
+}
+
+test("resume ingestion, question bank, daily plan and scoring share one canonical root", async () => {
+  const drive = fakeDrive();
+  const name = "简历用户";
+
+  const registered = await call(drive, 11, "system.user-registered", { displayName: name }, { namespace: "system" });
+  assert.equal(registered.status, "ok");
+  const identity = registered.identity;
+
+  const ingested = await call(drive, 12, "resume-knowledge.resume-ingested", {
+    event: {
+      schemaVersion: "1.2",
+      eventId: "a0000000-0000-4000-8000-000000000001",
+      eventKey: `${identity.userId}:resume:${RESUME_VERSION}`,
+      eventType: "resume-knowledge.resume-ingested",
+      userId: identity.userId,
+      username: identity.username,
+      resumeVersion: RESUME_VERSION,
+      fingerprint: RESUME_FINGERPRINT,
+      activatedAt: "2026-08-30T00:00:00.000Z",
+      claims: [{ claimId: "claim-redis", evidence: "explicit" }],
+      claimRelations: [],
+      techTags: ["Redis"],
+      evidenceLocations: [{ claimId: "claim-redis", location: "项目经历 · 订单缓存" }]
+    }
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(ingested.status, "ok", JSON.stringify(ingested));
+
+  const banked = await call(drive, 13, "resume-knowledge.question-bank-created", {
+    event: {
+      schemaVersion: "1.2",
+      eventId: "a0000000-0000-4000-8000-000000000002",
+      eventKey: `${identity.userId}:question-bank:${RESUME_VERSION}`,
+      eventType: "resume-knowledge.question-bank-created",
+      userId: identity.userId,
+      username: identity.username,
+      resumeVersion: RESUME_VERSION,
+      generatedAt: "2026-08-30T01:00:00.000Z",
+      questions: [bankQuestion()]
+    }
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(banked.status, "ok", JSON.stringify(banked));
+
+  const planned = await call(drive, 14, "resume-knowledge.daily-plan-created", {
+    event: {
+      schemaVersion: "1.2",
+      eventId: "a0000000-0000-4000-8000-000000000003",
+      eventKey: `${identity.userId}:daily-plan:2026-08-30`,
+      eventType: "resume-knowledge.daily-plan-created",
+      userId: identity.userId,
+      username: identity.username,
+      resumeVersion: RESUME_VERSION,
+      localDate: "2026-08-30",
+      planId: "plan-2026-08-30",
+      timezone: "Asia/Shanghai",
+      generatedAt: "2026-08-30T01:00:00.000Z",
+      items: [{
+        questionKey: QUESTION_KEY,
+        slot: "untested-explicit",
+        knowledgePointId: "redis",
+        evidence: "explicit",
+        type: "principle",
+        prompt: "什么是缓存穿透？如何解决？"
+      }]
+    }
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(planned.status, "ok", JSON.stringify(planned));
+
+  // The day's plan is immutable: asking again returns the stored plan.
+  const replanned = await call(drive, 15, "resume-knowledge.daily-plan-created", {
+    event: {
+      schemaVersion: "1.2",
+      eventId: "a0000000-0000-4000-8000-00000000000a",
+      eventKey: `${identity.userId}:daily-plan:2026-08-30:retry`,
+      eventType: "resume-knowledge.daily-plan-created",
+      userId: identity.userId,
+      username: identity.username,
+      resumeVersion: RESUME_VERSION,
+      localDate: "2026-08-30",
+      planId: "plan-2026-08-30",
+      timezone: "Asia/Shanghai",
+      generatedAt: "2026-08-30T01:30:00.000Z",
+      items: []
+    }
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(replanned.data.plan.generatedAt, "2026-08-30T01:00:00.000Z");
+  assert.equal(drive.filesByPrefix("daily-plan-").length, 1);
+
+  const first = await call(drive, 16, "resume-knowledge.answer-scored", {
+    event: answerScored({
+      userId: identity.userId,
+      username: identity.username,
+      localDate: "2026-08-30",
+      total: 70,
+      id: "a0000000-0000-4000-8000-000000000004"
+    })
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(first.status, "ok", JSON.stringify(first));
+  assert.equal(first.data.profile.questionMastery[QUESTION_KEY].masteryScore, 70);
+
+  // A second attempt on the same local date is answered but never persisted.
+  const repeat = await call(drive, 17, "resume-knowledge.answer-scored", {
+    event: answerScored({
+      userId: identity.userId,
+      username: identity.username,
+      localDate: "2026-08-30",
+      total: 90,
+      id: "a0000000-0000-4000-8000-000000000005"
+    })
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(repeat.status, "already_scored_today");
+  assert.equal(repeat.data.scoredTotal, 70);
+  assert.equal(drive.filesByPrefix("snapshot-").length, 1);
+
+  // The next local date scores the same question again and blends the mastery.
+  const nextDay = await call(drive, 18, "resume-knowledge.answer-scored", {
+    event: answerScored({
+      userId: identity.userId,
+      username: identity.username,
+      localDate: "2026-08-31",
+      total: 80,
+      id: "a0000000-0000-4000-8000-000000000006"
+    })
+  }, { namespace: "resume-knowledge", identity: { username: name } });
+  assert.equal(nextDay.status, "ok", JSON.stringify(nextDay));
+  assert.equal(nextDay.data.profile.questionMastery[QUESTION_KEY].masteryScore, 76);
+  assert.equal(drive.filesByPrefix("snapshot-").length, 2);
+
+  // Every projection landed below the single canonical user root.
+  const expected = new Map([
+    [`resume-${RESUME_VERSION}-${RESUME_FINGERPRINT}.json`, ["sources", "resume", "snapshots"]],
+    ["question-bank-", ["question-bank", "snapshots"]],
+    ["event-", ["events"]],
+    ["daily-plan-", ["plans", "daily"]],
+    ["snapshot-", ["profile", "snapshots"]]
+  ]);
+  const createdFiles = [...drive.files.values()];
+  for (const [prefix, segments] of expected) {
+    const matches = createdFiles.filter((file) => file.name.startsWith(prefix));
+    assert.ok(matches.length > 0, `no materialised file for ${prefix}`);
+    for (const file of matches) {
+      assert.deepEqual(ancestryOf(drive, file), [
+        "my-chatGPT-skills", "users", identity.userId, "resume-knowledge", ...segments, file.name
+      ]);
+    }
+  }
+
+  const namespaceScoped = [...drive.folders.values()]
+    .filter((folder) => folder.parents?.length === 1 && folder.parents[0] === "root");
+  assert.deepEqual(namespaceScoped.map((folder) => folder.name), ["my-chatGPT-skills"]);
+});

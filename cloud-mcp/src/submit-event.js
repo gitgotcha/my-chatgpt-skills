@@ -6,6 +6,7 @@ import { createEventStore } from "./event-store.js";
 import { createLegacyReader } from "./legacy-reader.js";
 import { createInterviewStore } from "./interview-store.js";
 import { createAlgorithmStore } from "./algorithm-store.js";
+import { createResumeKnowledgeStore } from "./resume-knowledge-store.js";
 
 const DOMAIN_BY_NAMESPACE = new Map([
   ["algorithm", "algorithm"],
@@ -74,6 +75,11 @@ export async function dispatchSubmitEvent(env, args, deps) {
   };
   const interviewStore = () => createInterviewStore({ eventStore: eventStore("interview"), drive, layout });
   const algorithmStore = () => createAlgorithmStore({ eventStore: eventStore("algorithm"), layout, drive });
+  const resumeKnowledgeStore = () => createResumeKnowledgeStore({
+    eventStore: eventStore("resume-knowledge"),
+    layout,
+    drive
+  });
 
   const handlers = {
     "system.user-registered": async () => ({
@@ -94,7 +100,13 @@ export async function dispatchSubmitEvent(env, args, deps) {
     },
     "interview.review.completed": (_env, { payload }) => interviewStore().submitReview(identity, payload.event),
     "algorithm.learning.completed": (_env, { payload }) => algorithmStore().submitLearning(identity, payload.event),
-    "algorithm.daily-plan-created": (_env, { payload }) => algorithmStore().createDailyPlan(identity, payload.event)
+    "algorithm.daily-plan-created": (_env, { payload }) => algorithmStore().createDailyPlan(identity, payload.event),
+    "resume-knowledge.resume-ingested": (_env, { payload }) => resumeKnowledgeStore().ingestResume(identity, payload.event),
+    "resume-knowledge.claim-confirmed": (_env, { payload }) => resumeKnowledgeStore().recordClaimDecision(identity, payload.event),
+    "resume-knowledge.claim-rejected": (_env, { payload }) => resumeKnowledgeStore().recordClaimDecision(identity, payload.event),
+    "resume-knowledge.question-bank-created": (_env, { payload }) => resumeKnowledgeStore().saveQuestionBank(identity, payload.event),
+    "resume-knowledge.daily-plan-created": (_env, { payload }) => resumeKnowledgeStore().getOrCreateDailyPlan(identity, payload.event),
+    "resume-knowledge.answer-scored": (_env, { payload }) => resumeKnowledgeStore().scoreAnswer(identity, payload.event)
   };
 
   const handler = deps.handlers?.[bound.eventType] ?? handlers[bound.eventType];

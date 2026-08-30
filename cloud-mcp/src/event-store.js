@@ -68,6 +68,10 @@ export function createEventStore({ domain = "interview", userStore, layout, driv
     const folder = await findEventsFolder(verifiedIdentity.userId);
     if (folder) return recordsIn(verifiedIdentity, folder.id);
     if (!legacyReader) return [];
+    // Only the pre-normalization namespaces have a legacy directory to fall
+    // back to. A domain added after the migration has no history to read, so
+    // asking the legacy adapter about it would only raise a false conflict.
+    if (Array.isArray(legacyReader.domains) && !legacyReader.domains.includes(domain)) return [];
     const legacyFolder = await legacyReader.path({ domain, userId: verifiedIdentity.userId, segments: ["events"] });
     return legacyFolder ? recordsIn(verifiedIdentity, legacyFolder.id) : [];
   }
