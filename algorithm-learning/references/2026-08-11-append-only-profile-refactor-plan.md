@@ -1,5 +1,7 @@
 # Append-Only Algorithm Profile Refactor Implementation Plan
 
+> **Archived / superseded.** 本文是规范化之前的历史实施计划；其中的路径与流程属于历史状态，MUST NOT be used for writes。当前契约见 [algorithm-profile-contract.md](algorithm-profile-contract.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Upgrade algorithm-learning profile persistence to schema 1.2 so every learning event and profile snapshot is created once, never overwritten, and profiles can always be rebuilt from verified event files.

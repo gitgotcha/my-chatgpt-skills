@@ -1,5 +1,7 @@
 # 算法用户镜像与每日练习设计
 
+> **Archived / superseded.** 本文是规范化之前的历史设计；其中的路径与流程属于历史状态，MUST NOT be used for writes。当前契约见 [algorithm-profile-contract.md](algorithm-profile-contract.md)。
+
 ## 目标
 
 在不改变既有答疑、渐进提示与最小修改的前提下，为每个确认用户维护独立算法镜像，并在每日 09:00（Asia/Shanghai）生成可完成的个人题单。

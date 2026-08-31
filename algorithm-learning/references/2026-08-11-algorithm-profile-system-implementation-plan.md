@@ -1,5 +1,7 @@
 # Algorithm Profile System Implementation Plan
 
+> **Archived / superseded.** 本文是规范化之前的历史实施计划；其中的路径与流程属于历史状态，MUST NOT be used for writes。当前契约见 [algorithm-profile-contract.md](algorithm-profile-contract.md)。
+
 **Goal:** 为 algorithm-learning 增加身份隔离的事件镜像和每日题单协议。
 
 **Architecture:** Skill 保持答疑入口；引用文件定义身份、事件、快照、Drive 提交与日程协议。静态契约测试防止后续维护删除关键规则。

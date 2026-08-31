@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 import tempfile
@@ -138,3 +139,44 @@ class MockHandoffTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(saved["persistenceStatus"], "cloud_persistence_pending")
             self.assertNotIn("driveReceipt", saved)
+
+    def test_session_event_never_embeds_local_output_paths(self) -> None:
+        event = create_mock_session_event(
+            _identity(), [_question(1)],
+            started_at="2026-08-14T00:00:00Z",
+            completed_at="2026-08-14T00:30:00Z",
+            event_id=EVENT_ID,
+            session_id=SESSION_ID,
+        )
+        # The submitted event must stay free of local copy bookkeeping.
+        for forbidden in ("persistenceStatus", "driveReceipt"):
+            self.assertNotIn(forbidden, event)
+        serialized = json.dumps(event, ensure_ascii=False)
+        for forbidden in ("outputs/", "output_root", "interview-", ".json"):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_local_copy_stays_inside_the_provided_output_root(self) -> None:
+        event = create_mock_session_event(
+            _identity(), [_question(1)],
+            started_at="2026-08-14T00:00:00Z",
+            completed_at="2026-08-14T00:30:00Z",
+            event_id=EVENT_ID,
+            session_id=SESSION_ID,
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_root = Path(temporary_directory)
+            path = save_session_copy(event, output_root, "ok")
+            self.assertTrue(path.is_relative_to(output_root))
+
+    def test_handoff_module_imports_only_safe_stdlib(self) -> None:
+        source = (
+            Path(__file__).resolve().parents[1] / "scripts" / "mock_handoff.py"
+        ).read_text(encoding="utf-8")
+        allowed_roots = {"__future__", "copy", "datetime", "json", "pathlib", "re", "typing"}
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertIn(alias.name.split(".")[0], allowed_roots, alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    self.assertIn(node.module.split(".")[0], allowed_roots, node.module)

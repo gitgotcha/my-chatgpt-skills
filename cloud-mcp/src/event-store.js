@@ -1,6 +1,8 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const encoder = new TextEncoder();
 
+const DOMAINS = new Set(["algorithm", "interview", "resume-knowledge"]);
+
 export function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -21,23 +23,26 @@ export async function canonicalHash(event) {
 const hasOnlyParent = (file, parentId) => Array.isArray(file?.parents) && file.parents.length === 1 && file.parents[0] === parentId;
 const validId = (value) => typeof value === "string" && UUID.test(value);
 
-export function createEventStore({ namespace = "interview", namespaceStore, drive, canonicalHash: hash = canonicalHash }) {
-  if (!namespaceStore?.verifyIdentity || !drive?.rootFolderId) throw new Error("invalid_event_store");
-  if (!new Set(["algorithm", "interview"]).has(namespace)) throw new Error("invalid_namespace");
+export function createEventStore({ domain = "interview", userStore, layout, drive, legacyReader, canonicalHash: hash = canonicalHash }) {
+  if (!userStore?.verify) throw new Error("invalid_event_store");
+  if (!layout?.ensureDomainPath || !layout?.findDomainPath) throw new Error("invalid_event_store");
+  if (!drive?.rootFolderId) throw new Error("invalid_event_store");
+  if (!DOMAINS.has(domain)) throw new Error("invalid_domain");
 
   async function verify(identity) {
-    const result = await namespaceStore.verifyIdentity(identity);
-    if (result?.status !== "ok" || result.identity?.userId !== identity?.userId || result.identity?.username !== identity?.username) throw new Error("identity_mismatch");
-    return result.identity;
+    if (!identity?.userId || typeof identity.username !== "string" || !identity.username) {
+      throw new Error("identity_mismatch");
+    }
+    const result = await userStore.verify({ userId: identity.userId, displayName: identity.username });
+    if (result?.status !== "ok" || result.identity?.userId !== identity.userId
+      || result.identity?.displayName !== identity.username) {
+      throw new Error("identity_mismatch");
+    }
+    return { userId: result.identity.userId, username: result.identity.displayName };
   }
 
-  async function eventFolder(identity, create) {
-    const namespaceRoot = create ? await drive.ensureFolder(drive.rootFolderId, namespace) : await drive.findFolder(drive.rootFolderId, namespace);
-    const users = namespaceRoot && (create ? await drive.ensureFolder(namespaceRoot.id, "users") : await drive.findFolder(namespaceRoot.id, "users"));
-    const user = users && (create ? await drive.ensureFolder(users.id, identity.userId) : await drive.findFolder(users.id, identity.userId));
-    const events = user && (create ? await drive.ensureFolder(user.id, "events") : await drive.findFolder(user.id, "events"));
-    return events && hasOnlyParent(events, user.id) ? events : null;
-  }
+  const ensureEventsFolder = (userId) => layout.ensureDomainPath(userId, domain, ["events"]);
+  const findEventsFolder = (userId) => layout.findDomainPath(userId, domain, ["events"]);
 
   async function validEvent(file, parentId, identity) {
     if (!file || !hasOnlyParent(file, parentId) || !/^event-[0-9a-f-]+\.json$/i.test(file.name)) return null;
@@ -50,13 +55,25 @@ export function createEventStore({ namespace = "interview", namespaceStore, driv
     return { event: structuredClone(event), file: read };
   }
 
+  async function recordsIn(identity, folderId) {
+    const files = await drive.listJson(folderId);
+    const records = await Promise.all(files.map((file) => validEvent(file, folderId, identity)));
+    return records.filter(Boolean);
+  }
+
+  // Canonical path wins. The legacy namespace directories are consulted only
+  // when the canonical events folder does not exist yet.
   async function verifiedEventRecords(identity) {
     const verifiedIdentity = await verify(identity);
-    const folder = await eventFolder(verifiedIdentity, false);
-    if (!folder) return [];
-    const files = await drive.listJson(folder.id);
-    const verified = await Promise.all(files.map((file) => validEvent(file, folder.id, verifiedIdentity)));
-    return verified.filter(Boolean);
+    const folder = await findEventsFolder(verifiedIdentity.userId);
+    if (folder) return recordsIn(verifiedIdentity, folder.id);
+    if (!legacyReader) return [];
+    // Only the pre-normalization namespaces have a legacy directory to fall
+    // back to. A domain added after the migration has no history to read, so
+    // asking the legacy adapter about it would only raise a false conflict.
+    if (Array.isArray(legacyReader.domains) && !legacyReader.domains.includes(domain)) return [];
+    const legacyFolder = await legacyReader.path({ domain, userId: verifiedIdentity.userId, segments: ["events"] });
+    return legacyFolder ? recordsIn(verifiedIdentity, legacyFolder.id) : [];
   }
 
   async function listVerifiedEvents(identity) {
@@ -79,7 +96,7 @@ export function createEventStore({ namespace = "interview", namespaceStore, driv
       if (duplicate.event.contentHash !== event.contentHash) throw new Error("event_key_conflict");
       return { event: duplicate.event, receipt: { fileId: duplicate.file.id, eventId: duplicate.event.eventId, eventKey: duplicate.event.eventKey } };
     }
-    const folder = await eventFolder(verifiedIdentity, true);
+    const folder = await ensureEventsFolder(verifiedIdentity.userId);
     if ((await drive.listJson(folder.id)).some((file) => file.name === `event-${event.eventId}.json`)) throw new Error("event_id_conflict");
     const created = await drive.createJson(folder.id, `event-${event.eventId}.json`, event);
     const checked = await validEvent(created, folder.id, verifiedIdentity);
