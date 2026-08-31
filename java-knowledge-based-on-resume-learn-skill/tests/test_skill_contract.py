@@ -15,6 +15,37 @@ FORBIDDEN_SCHEDULER_WRITE = re.compile(
     r"(通过|使用|调用|运行)[^\n]{0,25}(cron|automation|scheduler)[^\n]{0,25}(创建|新建|设置|修改)"
 )
 
+CLAUSE_BOUNDARY = re.compile(r"[\n。；;]")
+CONTRAST_BOUNDARY = re.compile(r"但(?:是)?|然而|不过|却")
+PROHIBITION_TERMS = r"不得|不可以|不允许|不可|不能|禁止|严禁|切勿|不应当|不应该"
+PERMISSION_TERMS = r"可以|允许|应当|应该|必须|改为|可"
+DEONTIC_MARKER = re.compile(
+    rf"(?P<prohibition>{PROHIBITION_TERMS})"
+    rf"|(?P<permission>{PERMISSION_TERMS})"
+)
+QUOTED_PROHIBITED_MENTION = re.compile(
+    rf"(?:{PROHIBITION_TERMS})[^\n。；;]{{0,32}}"
+    r"(?:声称|出现|说法|提示|提醒)[^\n。；;]{0,16}[“‘\"']"
+)
+
+
+def is_quoted_prohibited_mention(clause: str, permission_start: int) -> bool:
+    prefix = CONTRAST_BOUNDARY.split(clause[:permission_start])[-1]
+    return QUOTED_PROHIBITED_MENTION.search(prefix) is not None
+
+
+def find_permissive_directive(pattern: str, text: str):
+    """Find a permission while ignoring quoted explanatory prohibitions."""
+    for clause in CLAUSE_BOUNDARY.split(text):
+        for match in re.finditer(pattern, clause):
+            markers = list(DEONTIC_MARKER.finditer(match.group(0)))
+            if not markers or markers[-1].lastgroup != "permission":
+                continue
+            permission_start = match.start() + markers[-1].start()
+            if not is_quoted_prohibited_mention(clause, permission_start):
+                return match
+    return None
+
 
 def documents():
     return [ROOT / "SKILL.md", ROOT / "agents" / "openai.yaml"] + sorted(REFERENCES.glob("*.md"))
@@ -166,6 +197,34 @@ class JavaResumeKnowledgeSkillContractTests(unittest.TestCase):
         template = self._read("daily-task-prompt-template.md")
         for required in ("Asia/Shanghai", "09:00", "用户自行"):
             self.assertIn(required, template)
+
+
+    def test_negative_fixtures_reject_direct_permissions_but_allow_explanatory_prohibitions(self):
+        corpus = "\n".join(path.read_text(encoding="utf-8") for path in documents())
+        cases = {
+            "direct Drive writes": (
+                r"(?:可以|允许|应当|应该|必须|改为|可)[^\n。；]{0,56}(?:(?:直接)?(?:使用|调用)[^\n。；]{0,24}(?:Google\s*Drive|Drive)[^\n。；]{0,24}(?:写(?:入|工具)?|上传(?:到)?|创建|更新|覆盖|移动|删除)|(?:Google\s*Drive|Drive)[^\n。；]{0,24}(?:直接)?(?:写(?:入|工具)?|上传(?:到)?|创建|更新|覆盖|移动|删除))",
+                "Skill 可直接使用 Google Drive 写工具。",
+                "Skill 不得声称“可以直接使用 Google Drive 写工具”。",
+            ),
+            "pre-answer leakage": (
+                r"(?:(?:用户作答前|出题(?:时|阶段))[^\n。；]{0,24}(?:可以|允许|应当|应该|必须|可)[^\n。；]{0,24}(?:展示|披露|返回|给出)[^\n。；]{0,24}(?:评分点|推荐回答链|参考答案)|(?:可以|允许|应当|应该|必须|可)[^\n。；]{0,24}(?:在)?(?:用户作答前|出题(?:时|阶段))[^\n。；]{0,24}(?:展示|披露|返回|给出)[^\n。；]{0,24}(?:评分点|推荐回答链|参考答案))",
+                "用户作答前可以展示参考答案。",
+                "Skill 禁止出现“用户作答前可以展示参考答案”这类说法。",
+            ),
+            "automation ownership": (
+                r"(?:Skill|技能)[^\n。；]{0,24}(?:可以|允许|应当|应该|必须|改为|可)[^\n。；]{0,48}(?:(?:创建|修改|管理|启用|停用)[^\n。；]{0,24}(?:automation|定时任务)|(?:automation|定时任务)[^\n。；]{0,24}(?:创建|修改|管理|启用|停用))",
+                "Skill 可以创建 automation。",
+                "Skill 不得提醒用户“Skill 可以创建 automation”。",
+            ),
+        }
+        for label, (pattern, forbidden, safe) in cases.items():
+            with self.subTest(label=label, forbidden=forbidden):
+                self.assertIsNotNone(find_permissive_directive(pattern, forbidden))
+            with self.subTest(label=label, safe=safe):
+                self.assertIsNone(find_permissive_directive(pattern, safe))
+            with self.subTest(label=label, corpus=True):
+                self.assertIsNone(find_permissive_directive(pattern, corpus))
 
     # ----------------------------------------------------------- boundaries
 
