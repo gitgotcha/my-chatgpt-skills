@@ -7,6 +7,7 @@ are the tripwire.
 """
 
 from pathlib import Path
+import os
 import re
 import unittest
 
@@ -34,6 +35,7 @@ EXPECTED_REFERENCES = [
 EXPECTED_SCRIPTS = [
     "style_profile.py",
     "apply_style.py",
+    "build_generation_prompt.py",
     "analyze_image.py",
     "image_quality.py",
     "duplicate_detection.py",
@@ -220,6 +222,73 @@ class IdentityRuleConsistencyTests(unittest.TestCase):
         for licence in ("MIT", "Apache-2.0", "无许可证"):
             self.assertIn(licence, text)
         self.assertIn("未复制任何一行外部代码", text)
+
+
+def _readme_tree():
+    """Parse the ASCII directory tree in README.md into a list of paths.
+
+    Returns paths in the order they are drawn, using '/' as the separator.
+    Indentation is the only structure the format has, so we track the parent
+    by indentation width rather than guessing from the name.
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("child-photoShop-skill/"))
+    end = next(i for i, line in enumerate(lines[start:], start) if line.strip() == "```")
+
+    parent_of = {}
+    paths = []
+    for line in lines[start + 1:end]:
+        match = re.match(r"^([│ ]*)(\s*)[├└]── (.+)$", line)
+        if not match:
+            continue
+        indent = len(match.group(1)) + len(match.group(2))
+        name = match.group(3).split("  ")[0].strip().rstrip("/")
+        parent = parent_of.get(indent - 4, "") if indent >= 4 else ""
+        path = "{}/{}".format(parent, name) if parent else name
+        parent_of[indent] = path
+        paths.append(path)
+    return paths
+
+
+class ReadmeTreeTests(unittest.TestCase):
+    """The README tree is documentation too, so it rots the same way.
+
+    It is easy to add a script and forget the tree, or to list it in one
+    document and not the other. These tests make the three places agree.
+    """
+
+    def test_every_path_drawn_in_the_tree_exists(self):
+        for path in _readme_tree():
+            with self.subTest(path=path):
+                self.assertTrue((ROOT / path.replace("/", os.sep)).exists(), "dangling: " + path)
+
+    def test_tree_lists_every_script(self):
+        drawn = {p.rsplit("/", 1)[-1] for p in _readme_tree() if p.startswith("scripts/")}
+        self.assertEqual(drawn, set(EXPECTED_SCRIPTS))
+
+    def test_tree_lists_every_reference(self):
+        drawn = {p.rsplit("/", 1)[-1] for p in _readme_tree() if p.startswith("references/")}
+        self.assertEqual(drawn, set(EXPECTED_REFERENCES))
+
+    def test_script_order_agrees_across_readme_and_skill_md(self):
+        """README tree, SKILL.md table and EXPECTED_SCRIPTS must not drift apart."""
+        drawn = [p.rsplit("/", 1)[-1] for p in _readme_tree() if p.startswith("scripts/")]
+        tabled = re.findall(r"^\| `scripts/([a-z0-9_]+\.py)`", SKILL.read_text(encoding="utf-8"), re.M)
+        self.assertEqual(drawn, EXPECTED_SCRIPTS, "README tree order drifted")
+        self.assertEqual(tabled, EXPECTED_SCRIPTS, "SKILL.md table order drifted")
+
+    def test_tree_comments_are_aligned(self):
+        """A misaligned comment column is the usual symptom of a botched edit."""
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        script_lines = [
+            line for line in text.splitlines()
+            if re.match(r"^│\s+[├└]── \S+\.py\s{2,}\S", line)
+        ]
+        self.assertGreaterEqual(len(script_lines), 5)
+        columns = {len(line) - len(line.lstrip()) + len(line.lstrip().split("  ")[0])
+                   for line in script_lines}
+        self.assertEqual(len({c for c in columns if c}), 1, "comment column is ragged")
 
 
 if __name__ == "__main__":

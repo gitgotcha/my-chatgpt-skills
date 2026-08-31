@@ -57,12 +57,13 @@ child-photoShop-skill/
 ├── scripts/                             确定性工具（只做 Agent 不擅长的事）
 │   ├── style_profile.py                 learn / compare
 │   ├── apply_style.py                   套用风格画像（身份安全）
+│   ├── build_generation_prompt.py       风格画像 → 生图提示词（禁令全集）
 │   ├── analyze_image.py                 尺寸/EXIF/ICC/直方图
 │   ├── image_quality.py                 锐度/曝光/过曝评分
 │   ├── duplicate_detection.py           感知哈希 + 时间邻近去重
 │   ├── batch_manifest.py                manifest 生成与更新
 │   └── contact_sheet.py                 选片联系表
-└── tests/                               94 条测试（含契约测试与行为测试）
+└── tests/                               130 条测试（含契约测试与行为测试）
 ```
 
 ---
@@ -120,9 +121,10 @@ cd child-photoShop-skill
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-94 条，全绿。分四层：
+130 条，全绿。分五层：
 
-- **契约测试**（`test_skill_contract.py`）：SKILL.md 是否仍然写明了每一条硬规则，references/scripts 链接是否悬空。文档会静默腐烂，这是绊线。
+- **契约测试**（`test_skill_contract.py`）：SKILL.md 是否仍然写明了每一条硬规则，references/scripts 链接是否悬空；README 目录树与磁盘、与 SKILL.md 脚本表是否三方一致。文档会静默腐烂，这是绊线。
+- **提示词测试**（`test_generation_prompt.py`）：编译出的生图提示词是否始终携带完整禁令全集，是否不随 Profile 缩水；三种模式的强度上限与隐私声明是否正确。
 - **行为测试**（`test_style_learning.py`）：核心业务的量化验收——套用风格后亮度/饱和度/色温是否朝模板收敛，高光溢出是否低于 1%，逐像素不变量是否成立。
 - **工具测试**（`test_scripts.py`）：打分能否区分清晰与模糊，连拍能否正确聚成一簇，manifest 能否往返落盘。
 - **迭代测试**（`test_style_learning.py::IterationTests`）：连跑四轮会收敛到定点而不是每轮多偏一点；已达标的分量会被跳过。

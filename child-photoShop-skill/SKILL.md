@@ -304,6 +304,24 @@ Creative Edit 的输出必须与 Portrait Retouch 的输出**分目录存放**�
 
 若执行环境无任何图像编辑后端：明说限制，输出可执行的本地修图步骤与提示词，**不得谎称已修图**。
 
+### 生成式出图（生图）：三种模式
+
+本 Skill 自身不生成图像。当执行环境接了生成式后端（ChatGPT 生图、Codex、ComfyUI 等）时，**只允许以下三种用法**，且必须先编译提示词再调用后端：
+
+```text
+python scripts/build_generation_prompt.py --profile style.json --mode <mode> [--intent "再暖一点"]
+```
+
+| 模式 | 用途 | 是否上传儿童照片 |
+|---|---|---|
+| `reference_board`（默认） | 生成风格/氛围参考板，画面里不出现真人 | 否，**推荐** |
+| `background_only` | 只重绘背景，孩子是受保护区域 | 是，需先取得同意 |
+| `full_frame` | 全图重生成 | 是，仅限 Creative Edit 且二次确认 |
+
+编译器输出的负向约束是**固定全集**，不从 Profile 推导 —— 任何 Profile 都无权缩短它。生成后必须回炉做 Identity QA（§十三），任一身份/童真/表情项失败即丢弃生成结果、保留原图，并按 §十四 降级。
+
+`full_frame` 属于 Full Regeneration，标准精修中永远不触发。
+
 ---
 
 ## 十三、QA 引擎
@@ -361,6 +379,7 @@ QA 失败后按序降级，**不得原地重复同一参数**：
 |---|---|
 | `scripts/style_profile.py` | `learn` 从参考图学习风格画像；`compare` 诊断目标图与模板的偏差 |
 | `scripts/apply_style.py` | 把 Style Profile 应用到目标图（纯影调/色彩变换，身份安全） |
+| `scripts/build_generation_prompt.py` | 把 Style Profile 编译成图像生成提示词（含全套身份/童真/表情负向约束） |
 | `scripts/analyze_image.py` | 尺寸、EXIF、方向、色彩空间、直方图、元数据 |
 | `scripts/image_quality.py` | 锐度、亮度、过曝/欠曝、模糊、曝光评分 |
 | `scripts/duplicate_detection.py` | 感知哈希 + 时间邻近，识别连拍重复 |
