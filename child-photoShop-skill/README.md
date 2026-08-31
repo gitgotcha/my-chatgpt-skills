@@ -63,7 +63,7 @@ child-photoShop-skill/
 │   ├── duplicate_detection.py           感知哈希 + 时间邻近去重
 │   ├── batch_manifest.py                manifest 生成与更新
 │   └── contact_sheet.py                 选片联系表
-└── tests/                               130 条测试（含契约测试与行为测试）
+└── tests/                               133 条测试（含契约测试与行为测试）
 ```
 
 ---
@@ -121,7 +121,7 @@ cd child-photoShop-skill
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-130 条，全绿。分五层：
+133 条，全绿。分五层：
 
 - **契约测试**（`test_skill_contract.py`）：SKILL.md 是否仍然写明了每一条硬规则，references/scripts 链接是否悬空；README 目录树与磁盘、与 SKILL.md 脚本表是否三方一致。文档会静默腐烂，这是绊线。
 - **提示词测试**（`test_generation_prompt.py`）：编译出的生图提示词是否始终携带完整禁令全集，是否不随 Profile 缩水；三种模式的强度上限与隐私声明是否正确。

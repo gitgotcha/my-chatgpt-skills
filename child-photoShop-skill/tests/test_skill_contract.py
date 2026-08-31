@@ -9,6 +9,7 @@ are the tripwire.
 from pathlib import Path
 import os
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -249,6 +250,62 @@ def _readme_tree():
         parent_of[indent] = path
         paths.append(path)
     return paths
+
+
+PHOTO_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tif", ".tiff", ".bmp",
+    ".raw", ".cr2", ".cr3", ".nef", ".arw", ".orf", ".rw2", ".dng", ".raf",
+    ".pef", ".srw", ".x3f", ".3fr", ".mos", ".mrw", ".erf", ".kdc", ".dcr",
+    ".psd", ".psb", ".xcf", ".dcp",
+}
+
+
+class NoPhotographsTests(unittest.TestCase):
+    """No photograph may enter this repository, ever.
+
+    The skill works on real children's photographs, and the V2 benchmark needs
+    a real set of them. That set has to live somewhere, and the obvious place
+    -- a folder next to the code -- is one `git add -A` away from publishing
+    photographs of children on a public repo.
+
+    .gitignore makes the accident hard; this makes it loud. It is the same
+    argument as the identity lock: do not rely on remembering, make the wrong
+    thing impossible to do quietly.
+    """
+
+    def test_no_photograph_sits_in_the_skill_directory(self):
+        offenders = []
+        for dirpath, dirnames, filenames in os.walk(str(ROOT)):
+            dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__")]
+            for name in filenames:
+                if os.path.splitext(name)[1].lower() in PHOTO_EXTENSIONS:
+                    offenders.append(os.path.join(dirpath, name))
+        self.assertEqual([], offenders, "photographs found: {}".format(offenders))
+
+    def test_no_photograph_is_tracked_by_git(self):
+        """.gitignore can be overridden with `git add -f`; tracked files cannot be hidden."""
+        repo = ROOT.parent
+        try:
+            listed = subprocess.run(
+                ["git", "ls-files"], cwd=str(repo),
+                capture_output=True, text=True, timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            self.skipTest("git unavailable")
+        if listed.returncode != 0:
+            self.skipTest("not a git working tree")
+
+        offenders = [
+            path for path in listed.stdout.splitlines()
+            if path.startswith("child-photoShop-skill/")
+            and os.path.splitext(path)[1].lower() in PHOTO_EXTENSIONS
+        ]
+        self.assertEqual([], offenders, "tracked photographs: {}".format(offenders))
+
+    def test_gitignore_declares_the_photo_rules(self):
+        rules = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        for pattern in ("benchmark/", "*.jpg", "*.dng", "*.dcp"):
+            self.assertIn(pattern, rules)
 
 
 class ReadmeTreeTests(unittest.TestCase):
