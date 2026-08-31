@@ -38,7 +38,7 @@ python scripts/contact_sheet.py ./selected --out reports/contact_sheet.jpg
 
 ```text
 child-photoShop-skill/
-├── SKILL.md                            主入口（先读这个）
+├── SKILL.md                             主入口（先读这个）
 ├── agents/openai.yaml                   界面元信息
 ├── README.md                            本文件
 ├── references/                          按需加载的规范文档
@@ -63,6 +63,12 @@ child-photoShop-skill/
 │   ├── duplicate_detection.py           感知哈希 + 时间邻近去重
 │   ├── batch_manifest.py                manifest 生成与更新
 │   └── contact_sheet.py                 选片联系表
+├── style-library/                       风格库与加权混合（静态前端原型）
+│   ├── index.html                       页面骨架
+│   ├── styles.css                       样式
+│   ├── profile-library.js               纯逻辑层：混合、校验、导出
+│   ├── app.js                           界面层：卡片、滑块、结果
+│   └── smoke-test.js                    零依赖冒烟测试：node smoke-test.js
 └── tests/                               133 条测试（含契约测试与行为测试）
 ```
 
@@ -111,6 +117,7 @@ child-photoShop-skill/
 - 生成式精修后端尚未集成（第一阶段刻意延后，先把身份安全的地基打牢）。
 - 人脸检测相关的打分（身份漂移余弦相似度 ≥0.90）需要接入人脸模型后才能自动化，目前是人工 QA 项。
 - 阈值是在合成 fixture 上标定的；真实照片细节丰富得多，首批真实样本跑完后需要重新校准 `image_quality.py` 的两个常数。
+- **风格库页面是前端原型。** `style-library/` 用的是内置静态风格数据，保存接口为占位实现（只校验、不落盘），只有「导出 JSON」是真的。真实风格画像应由 `scripts/style_profile.py learn` 从模板图学出后再接进来。
 
 ---
 
@@ -130,3 +137,12 @@ python -m unittest discover -s tests -p "test_*.py"
 - **迭代测试**（`test_style_learning.py::IterationTests`）：连跑四轮会收敛到定点而不是每轮多偏一点；已达标的分量会被跳过。
 
 测试全部使用合成 fixture，仓库里不会存放任何真实儿童照片。
+
+风格画像库另有一层零依赖的 JS 冒烟测试：
+
+```bash
+cd child-photoShop-skill/style-library
+node smoke-test.js    # 22 项，零依赖
+```
+
+覆盖权重归一化、加权混合、颜色混色、身份字段校验与导出。界面出问题肉眼看得见，混合系数算错了看不见 —— 这一层是管后者的。前端的 `NUMERIC_DIMS` 与 `BANNED_KEYS` 从 Python 侧逐字复制而来，身份安全边界在浏览器里同样成立。

@@ -336,16 +336,23 @@ class ReadmeTreeTests(unittest.TestCase):
         self.assertEqual(tabled, EXPECTED_SCRIPTS, "SKILL.md table order drifted")
 
     def test_tree_comments_are_aligned(self):
-        """A misaligned comment column is the usual symptom of a botched edit."""
+        """A misaligned comment column is the usual symptom of a botched edit.
+
+        Measure where the comment actually starts. The obvious
+        ``line.lstrip().split("  ")[0]`` does NOT work on these lines: they
+        begin with "│", which lstrip() leaves in place, and the three spaces
+        after it are already a two-space match — so every line measured 1 and
+        this test could not fail no matter how ragged the tree got. That
+        version shipped and caught nothing; SKILL.md's comment sat one column
+        left of the rest until it was rewritten below.
+        """
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        script_lines = [
-            line for line in text.splitlines()
-            if re.match(r"^│\s+[├└]── \S+\.py\s{2,}\S", line)
-        ]
-        self.assertGreaterEqual(len(script_lines), 5)
-        columns = {len(line) - len(line.lstrip()) + len(line.lstrip().split("  ")[0])
-                   for line in script_lines}
-        self.assertEqual(len({c for c in columns if c}), 1, "comment column is ragged")
+        drawn = [m for m in (re.match(r"^([│\s]*[├└]── \S+?)( {2,})(\S)", line)
+                             for line in text.splitlines()) if m]
+        self.assertGreaterEqual(len(drawn), 20, "expected the whole tree to be drawn")
+        columns = {len(m.group(1)) + len(m.group(2)) for m in drawn}
+        self.assertEqual(len(columns), 1,
+                         "comment column is ragged: " + repr(sorted(columns)))
 
 
 if __name__ == "__main__":
