@@ -3,6 +3,7 @@ import test from "node:test";
 import { createMigrationStore } from "../src/migration-store.js";
 import { createLegacyReader } from "../src/legacy-reader.js";
 import { createStorageLayout } from "../src/storage-layout.js";
+import { canonicalHash } from "../src/event-store.js";
 
 const FOLDER = "application/vnd.google-apps.folder";
 const USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -65,13 +66,25 @@ async function seedLegacy(drive, { domain, userId, username, events, snapshots =
     username,
     createdAt: "2026-08-01T00:00:00.000Z"
   });
+  async function validSource(value) {
+    const source = structuredClone(value);
+    if (!source || typeof source !== "object" || Array.isArray(source)) return source;
+    if (!Object.hasOwn(source, "userId")) source.userId = userId;
+    if (!Object.hasOwn(source, "username")) source.username = username;
+    if (!Object.hasOwn(source, "contentHash")) source.contentHash = await canonicalHash(source);
+    return source;
+  }
   for (const [name, value] of Object.entries(events)) {
-    await drive.createJson(eventsFolder.id, name, value);
+    await drive.createJson(eventsFolder.id, name, await validSource(value));
   }
   for (const [index, value] of snapshots.entries()) {
-    await drive.createJson(snapshotsFolder.id, `snapshot-2026-08-0${index + 1}T00-00-00-000Z-0000000${index + 1}-0000-4000-8000-000000000000.json`, value);
+    await drive.createJson(
+      snapshotsFolder.id,
+      `snapshot-2026-08-0${index + 1}T00-00-00-000Z-0000000${index + 1}-0000-4000-8000-000000000000.json`,
+      await validSource(value)
+    );
   }
-  return { root, eventsFolder, snapshotsFolder };
+  return { root, registry, eventsFolder, snapshotsFolder };
 }
 
 function setup() {
@@ -109,9 +122,7 @@ const legacyEvent = (suffix) => ({
   schemaVersion: "1.2",
   eventId: `30000000-0000-4000-8000-0000000000${suffix}`,
   eventKey: `legacy:${suffix}`,
-  eventType: "algorithm.learning.completed",
-  userId: LEGACY_ALGORITHM_ID,
-  username: USERNAME
+  eventType: "algorithm.learning.completed"
 });
 
 async function seededHarness() {
@@ -351,4 +362,80 @@ test("an unregistered identity and unknown domains are refused", async () => {
     () => store.plan({ userId: "not-a-uuid", username: USERNAME }, { displayName: USERNAME, domains: ["algorithm"] }),
     /identity_mismatch/
   );
+});
+
+test("legacy source identity accepts normalised usernames and rejects mismatches before writes", async () => {
+  const { drive, store, baseline } = await seededHarness();
+  const source = [...drive.files.values()].find((file) => file.name === ALGORITHM_EVENT_1);
+  source.value.username = `  ${USERNAME}  `;
+  source.value.contentHash = await canonicalHash(source.value);
+  const accepted = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
+  assert.equal(accepted.summary.conflict, 0);
+
+  source.value.userId = LEGACY_INTERVIEW_ID;
+  source.value.contentHash = await canonicalHash(source.value);
+  const rejected = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
+  assert.equal(rejected.summary.conflict, 1);
+  await assert.rejects(() => store.execute(identity, {
+    migrationId: "99999999-9999-4999-8999-000000000008",
+    approvedPlanHash: rejected.planHash,
+    displayName: USERNAME,
+    domains: ["algorithm"]
+  }), /migration_conflict/);
+  assert.deepEqual(createdSince(drive, baseline), []);
+});
+
+test("legacy sources with missing hashes, incorrect hashes, or non-objects fail closed", async () => {
+  for (const [label, mutate] of [
+    ["missing", (value) => { delete value.contentHash; }],
+    ["incorrect", (value) => { value.contentHash = "bad"; }],
+    ["non-object", () => "broken source"]
+  ]) {
+    const { drive, store, baseline } = await seededHarness();
+    const source = [...drive.files.values()].find((file) => file.name === ALGORITHM_EVENT_1);
+    const candidate = structuredClone(source.value);
+    const changed = mutate(candidate);
+    source.value = changed === undefined ? candidate : changed;
+    const plan = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
+    assert.equal(plan.summary.conflict, 1, label);
+    await assert.rejects(() => store.execute(identity, {
+      migrationId: "99999999-9999-4999-8999-000000000009",
+      approvedPlanHash: plan.planHash,
+      displayName: USERNAME,
+      domains: ["algorithm"]
+    }), /migration_conflict/, label);
+    assert.deepEqual(createdSince(drive, baseline), [], label);
+  }
+});
+
+test("duplicate legacy registrations and source target keys fail before any copy", async () => {
+  const registrationHarness = await seededHarness();
+  const algorithmRegistry = [...registrationHarness.drive.folders.values()]
+    .find((folder) => folder.name === "user-registry"
+      && registrationHarness.drive.folders.get(folder.parents[0])?.name === "algorithm");
+  await registrationHarness.drive.createJson(
+    algorithmRegistry.id,
+    `registration-${LEGACY_ALGORITHM_ID}.json`,
+    { schemaVersion: "1.2", status: "active", userId: LEGACY_ALGORITHM_ID, username: USERNAME }
+  );
+  await assert.rejects(
+    () => registrationHarness.store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] }),
+    /legacy_registration_conflict/
+  );
+
+  const { drive, store, baseline } = await seededHarness();
+  const source = [...drive.files.values()].find((file) => file.name === ALGORITHM_EVENT_1);
+  const duplicate = structuredClone(source.value);
+  duplicate.eventKey = "legacy:duplicate";
+  duplicate.contentHash = await canonicalHash(duplicate);
+  await drive.createJson(source.parents[0], ALGORITHM_EVENT_1, duplicate);
+  const plan = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
+  assert.equal(plan.summary.conflict, 2);
+  await assert.rejects(() => store.execute(identity, {
+    migrationId: "99999999-9999-4999-8999-000000000010",
+    approvedPlanHash: plan.planHash,
+    displayName: USERNAME,
+    domains: ["algorithm"]
+  }), /migration_conflict/);
+  assert.deepEqual(createdSince(drive, baseline), []);
 });

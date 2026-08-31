@@ -36,11 +36,31 @@ export function createMigrationStore({
   /** Legacy user ids whose registration matches the normalised display name. */
   async function legacyUserIds(domain, name) {
     const records = await legacyReader.registrations(domain);
-    const matched = records
-      .filter((record) => isUuid(record.userId)
-        && normalizeDisplayName(record.username ?? record.displayName) === name)
-      .map((record) => record.userId);
-    return [...new Set(matched)];
+    const matched = records.filter((record) => isUuid(record?.userId)
+      && normalizeDisplayName(record.username ?? record.displayName) === name);
+    // A name must identify one—and only one—legacy registration. Even two
+    // otherwise identical records are ambiguous provenance and must stop the
+    // migration before it selects or copies a source object.
+    if (matched.length > 1) throw new Error("legacy_registration_conflict");
+    return matched.map((record) => record.userId);
+  }
+
+  async function sourceIntegrity(value, { legacyUserId, name }) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { contentHash: null, reason: "source_invalid_object" };
+    }
+    const contentHash = await hash(value);
+    if (typeof value.contentHash !== "string") {
+      return { contentHash, reason: "source_content_hash_missing" };
+    }
+    if (value.contentHash !== contentHash) {
+      return { contentHash, reason: "source_content_hash_mismatch" };
+    }
+    if (value.userId !== legacyUserId
+      || normalizeDisplayName(value.username) !== name) {
+      return { contentHash, reason: "source_identity_mismatch" };
+    }
+    return { contentHash, reason: null };
   }
 
   /** Enumerate every legacy object that belongs to the requested user. */
@@ -54,16 +74,21 @@ export function createMigrationStore({
           if (!folder) continue;
           for (const file of await legacyReader.listJson(folder.id)) {
             const read = await legacyReader.readJson(file.id);
-            if (!read || read.name !== file.name || !read.value) continue;
+            const source = `root/${domain}/users/${legacyUserId}/${segments.join("/")}/${file.name}`;
+            const target = `${layout.pluginRootName}/users/${identity.userId}/${domain}/${segments.join("/")}/${file.name}`;
+            const integrity = read?.name === file.name
+              ? await sourceIntegrity(read.value, { legacyUserId, name })
+              : { contentHash: null, reason: "source_unreadable" };
             items.push({
               domain,
               legacyUserId,
               sourceFileId: file.id,
               sourceName: file.name,
               segments,
-              contentHash: await hash(read.value),
-              source: `root/${domain}/users/${legacyUserId}/${segments.join("/")}/${file.name}`,
-              target: `${layout.pluginRootName}/users/${identity.userId}/${domain}/${segments.join("/")}/${file.name}`
+              contentHash: integrity.contentHash,
+              source,
+              target,
+              sourceReason: integrity.reason
             });
           }
         }
@@ -78,19 +103,39 @@ export function createMigrationStore({
    * target key is a conflict that must never be overwritten.
    */
   async function resolveActions(identity, items) {
+    const targetCounts = new Map();
+    for (const item of items) {
+      targetCounts.set(item.target, (targetCounts.get(item.target) ?? 0) + 1);
+    }
+
     const resolved = [];
     for (const item of items) {
-      let action = COPY;
-      const folder = await layout.findDomainPath(identity.userId, item.domain, item.segments);
-      if (folder) {
-        const existing = (await drive.listJson(folder.id)).find((file) => file.name === item.sourceName);
-        if (existing) {
-          const read = await drive.readJson(existing.id);
-          const existingHash = read?.value ? await hash(read.value) : null;
-          action = existingHash === item.contentHash ? SKIP : CONFLICT;
+      let action = item.sourceReason || targetCounts.get(item.target) > 1 ? CONFLICT : COPY;
+      let reason = item.sourceReason ?? (targetCounts.get(item.target) > 1 ? "source_target_key_conflict" : null);
+      if (action !== CONFLICT) {
+        const folder = await layout.findDomainPath(identity.userId, item.domain, item.segments);
+        if (folder) {
+          const existing = (await drive.listJson(folder.id))
+            .filter((file) => file.name === item.sourceName);
+          if (existing.length > 1) {
+            action = CONFLICT;
+            reason = "target_key_conflict";
+          } else if (existing.length === 1) {
+            const read = await drive.readJson(existing[0].id);
+            const existingHash = read?.value && typeof read.value === "object" && !Array.isArray(read.value)
+              ? await hash(read.value)
+              : null;
+            if (!existingHash) {
+              action = CONFLICT;
+              reason = "target_invalid_object";
+            } else {
+              action = existingHash === item.contentHash ? SKIP : CONFLICT;
+              reason = action === CONFLICT ? "target_content_conflict" : null;
+            }
+          }
         }
       }
-      resolved.push({ ...item, action });
+      resolved.push({ ...item, action, reason });
     }
     return resolved;
   }
@@ -105,7 +150,9 @@ export function createMigrationStore({
     displayName: name,
     userId,
     domains,
-    items: items.map(({ sourceFileId, target, contentHash }) => ({ sourceFileId, target, contentHash }))
+    items: items.map(({ sourceFileId, target, contentHash, sourceReason }) => ({
+      sourceFileId, target, contentHash, sourceReason
+    }))
   });
 
   async function buildPlan(identity, { displayName, domains }) {
@@ -170,12 +217,38 @@ export function createMigrationStore({
     if (planHash !== approvedPlanHash) throw new Error("migration_plan_stale");
     if (summary.conflict > 0) throw new Error("migration_conflict");
 
-    const copied = [];
-    for (const item of items.filter((candidate) => candidate.action === COPY)) {
-      const folder = await layout.ensureDomainPath(identity.userId, item.domain, item.segments);
+    const copyItems = items.filter((candidate) => candidate.action === COPY);
+    const sourceValues = new Map();
+    // Re-check every copy candidate before the first write. This closes the
+    // gap between the approved re-scan and the copy loop: malformed or swapped
+    // legacy data can never result in a partial migration.
+    for (const item of copyItems) {
       const source = await legacyReader.readJson(item.sourceFileId);
-      if (!source?.value) throw new Error("migration_source_unreadable");
-      const created = await drive.createJson(folder.id, item.sourceName, source.value);
+      if (!source || source.name !== item.sourceName) throw new Error("migration_source_unreadable");
+      const integrity = await sourceIntegrity(source.value, {
+        legacyUserId: item.legacyUserId,
+        name
+      });
+      if (integrity.reason || integrity.contentHash !== item.contentHash) {
+        throw new Error("migration_source_changed");
+      }
+      sourceValues.set(item.sourceFileId, structuredClone(source.value));
+    }
+    // A target added after the re-scan is also a conflict; check all of them
+    // before writing any object so a concurrent change cannot produce a
+    // partially copied batch.
+    const targetFolders = new Map();
+    for (const item of copyItems) {
+      const folder = await layout.ensureDomainPath(identity.userId, item.domain, item.segments);
+      const existing = (await drive.listJson(folder.id)).filter((file) => file.name === item.sourceName);
+      if (existing.length > 0) throw new Error("migration_target_changed");
+      targetFolders.set(item.sourceFileId, folder);
+    }
+
+    const copied = [];
+    for (const item of copyItems) {
+      const folder = targetFolders.get(item.sourceFileId);
+      const created = await drive.createJson(folder.id, item.sourceName, sourceValues.get(item.sourceFileId));
       const read = await drive.readJson(created.id);
       const copiedHash = read?.value ? await hash(read.value) : null;
       if (!read || read.name !== item.sourceName || copiedHash !== item.contentHash) throw new Error("migration_hash_mismatch");
