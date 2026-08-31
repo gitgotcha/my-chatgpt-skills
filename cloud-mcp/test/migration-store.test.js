@@ -393,8 +393,9 @@ test("legacy sources with missing hashes, incorrect hashes, or non-objects fail 
   ]) {
     const { drive, store, baseline } = await seededHarness();
     const source = [...drive.files.values()].find((file) => file.name === ALGORITHM_EVENT_1);
-    const changed = mutate(structuredClone(source.value));
-    source.value = changed === undefined ? source.value : changed;
+    const candidate = structuredClone(source.value);
+    const changed = mutate(candidate);
+    source.value = changed === undefined ? candidate : changed;
     const plan = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
     assert.equal(plan.summary.conflict, 1, label);
     await assert.rejects(() => store.execute(identity, {
