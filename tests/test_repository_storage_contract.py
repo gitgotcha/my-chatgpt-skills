@@ -30,10 +30,10 @@ RETIRED_TOKENS = (
 # The only places that may name the retired layout: the read-only compatibility
 # reader, the non-destructive migration, and their own tests.
 ALLOWED_PATHS = frozenset({
-    "cloud-mcp/src/legacy-reader.js",
-    "cloud-mcp/src/migration-store.js",
-    "cloud-mcp/test/legacy-reader.test.js",
-    "cloud-mcp/test/migration-store.test.js",
+    "services/reliable-drive-sync-worker/src/legacy-reader.js",
+    "services/reliable-drive-sync-worker/src/migration-store.js",
+    "services/reliable-drive-sync-worker/test/legacy-reader.test.js",
+    "services/reliable-drive-sync-worker/test/migration-store.test.js",
 })
 
 # Historical design and planning documents keep the old wording on purpose.
@@ -52,7 +52,10 @@ SKIP_DIRECTORIES = frozenset({
     ".mypy_cache",
     ".venv",
     "venv",
+    ".superpowers",
 })
+
+SKIP_RELATIVE_PREFIXES = ("docs/audits/", "upload/")
 
 SKIP_SUFFIXES = frozenset({
     ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
@@ -82,7 +85,10 @@ def documents():
             continue
         if path.suffix.lower() in SKIP_SUFFIXES:
             continue
-        if relative_path(path) == relative_path(pathlib.Path(__file__).resolve()):
+        relative = relative_path(path)
+        if relative.startswith(SKIP_RELATIVE_PREFIXES):
+            continue
+        if relative == relative_path(pathlib.Path(__file__).resolve()):
             continue
         yield path
 
@@ -92,8 +98,16 @@ class RepositoryStorageContractTest(unittest.TestCase):
         files = list(documents())
         self.assertGreater(len(files), 20, "the scan silently covered nothing")
         names = {relative for relative in (relative_path(path) for path in files)}
-        for expected in ("AGENTS.md", "cloud-mcp/README.md", "cloud-mcp/src/submit-event.js"):
+        for expected in (
+            "AGENTS.md",
+            "services/reliable-drive-sync-worker/README.md",
+            "services/reliable-drive-sync-worker/src/submit-event.js",
+            "tools/reliable-drive-sync-mcp/stdio-bridge.mjs",
+        ):
             self.assertIn(expected, names)
+
+    def test_legacy_cloud_mcp_directory_is_removed(self):
+        self.assertFalse((REPOSITORY_ROOT / "cloud-mcp").exists())
 
     def test_no_active_file_uses_retired_storage_paths(self):
         offenders = []

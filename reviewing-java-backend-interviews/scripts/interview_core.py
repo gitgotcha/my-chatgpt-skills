@@ -1,6 +1,7 @@
 """Deterministic validation and local persistence for interview review artifacts.
 
-The active profile reducer lives in the Cloud MCP Worker (``cloud-mcp/src/profile-model.js``).
+The active profile reducer lives in the Reliable Drive Sync Worker
+(``services/reliable-drive-sync-worker/src/profile-model.js``).
 This module only builds and validates schema-1.2 review events, writes the local report copy,
 and keeps the domain/source planning helpers free of cloud assumptions.
 """
@@ -263,4 +264,3 @@ def plan_question_sources(has_resume: bool, total_questions: int) -> dict[str, i
         "domain_knowledge": 45,
         "algorithm_and_scenario": 20,
     })
-

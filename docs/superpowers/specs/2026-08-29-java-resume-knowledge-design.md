@@ -507,7 +507,7 @@ Cloud MCP：
 
 ## 16. 实现命名补充（实现期决定）
 
-第 10 节的评分维度只给出了中文名与权重，未规定事件中使用的英文字段名。为了保持 JSON 事件可校验，实现采用如下机械转写，并在 `cloud-mcp/src/resume-knowledge-model.js` 的 `SCORE_DIMENSIONS` 中集中冻结权重，改名只需改一处：
+第 10 节的评分维度只给出了中文名与权重，未规定事件中使用的英文字段名。为了保持 JSON 事件可校验，实现采用如下机械转写，并在 `services/reliable-drive-sync-worker/src/resume-knowledge-model.js` 的 `SCORE_DIMENSIONS` 中集中冻结权重，改名只需改一处：
 
 | 中文维度 | 事件字段名 | 权重 |
 | --- | --- | --- |

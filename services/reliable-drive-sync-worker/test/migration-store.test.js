@@ -423,12 +423,13 @@ test("duplicate legacy registrations and source target keys fail before any copy
     /legacy_registration_conflict/
   );
 
-  const { drive, store, baseline } = await seededHarness();
+  const { drive, store } = await seededHarness();
   const source = [...drive.files.values()].find((file) => file.name === ALGORITHM_EVENT_1);
   const duplicate = structuredClone(source.value);
   duplicate.eventKey = "legacy:duplicate";
   duplicate.contentHash = await canonicalHash(duplicate);
   await drive.createJson(source.parents[0], ALGORITHM_EVENT_1, duplicate);
+  const baseline = drive.createdJsonFiles.length;
   const plan = await store.plan(identity, { displayName: USERNAME, domains: ["algorithm"] });
   assert.equal(plan.summary.conflict, 2);
   await assert.rejects(() => store.execute(identity, {

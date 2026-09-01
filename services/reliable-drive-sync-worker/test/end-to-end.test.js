@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { handleRequest } from "../src/index.js";
+import { canonicalHash } from "../src/event-store.js";
 
 const SESSION_EVENT_ID = "22222222-2222-4222-8222-222222222222";
 const REVIEW_EVENT_ID = "33333333-3333-4333-8333-333333333333";
@@ -449,7 +450,7 @@ async function seedLegacyNamespace(drive, { domain, userId, username, events, sn
     createdAt: "2026-08-01T00:00:00.000Z"
   });
   for (const eventId of events) {
-    await drive.createJson(eventsFolder.id, `event-${eventId}.json`, {
+    const event = {
       schemaVersion: "1.2",
       eventId,
       eventKey: `legacy:${eventId}`,
@@ -457,13 +458,22 @@ async function seedLegacyNamespace(drive, { domain, userId, username, events, sn
       userId,
       username,
       topic: "legacy-topic"
-    });
+    };
+    event.contentHash = await canonicalHash(event);
+    await drive.createJson(eventsFolder.id, `event-${eventId}.json`, event);
   }
   for (const [index, snapshot] of snapshots.entries()) {
+    const snapshotValue = {
+      schemaVersion: "1.2",
+      headEventId: snapshot,
+      userId,
+      username
+    };
+    snapshotValue.contentHash = await canonicalHash(snapshotValue);
     await drive.createJson(
       snapshotsFolder.id,
       `snapshot-2026-08-0${index + 1}T00-00-00-000Z-${snapshot}.json`,
-      { schemaVersion: "1.2", headEventId: snapshot }
+      snapshotValue
     );
   }
 }

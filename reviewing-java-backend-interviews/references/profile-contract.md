@@ -4,7 +4,7 @@
 
 ## 画像的唯一实现方
 
-画像 reducer 的唯一活动实现是 Cloud MCP Worker 的 `cloud-mcp/src/profile-model.js`。Python 侧（`scripts/interview_core.py`）不再实现画像校验、乐观 current-profile 更新或事件重放。它只负责：
+画像 reducer 的唯一活动实现是 Reliable Drive Sync Worker 的 `services/reliable-drive-sync-worker/src/profile-model.js`。Python 侧（`scripts/interview_core.py`）不再实现画像校验、乐观 current-profile 更新或事件重放。它只负责：
 
 - 构造并校验 schema-1.2 `interview.review.completed` 事件；
 - 写入本地报告副本；

@@ -27,7 +27,7 @@ QuestionReview, ProfileChange, ReviewEvent, ProfileSnapshot
 
 ## 确定性画像更新
 
-画像 reducer 的唯一活动实现是 Worker 的 `cloud-mcp/src/profile-model.js`。Python 核心不再提供 `validate_artifact`、`apply_review_event` 或 `rebuild_profile`。它只构造并校验 schema-1.2 事件、写本地报告副本，并提供与云端无关的领域解析与题源规划纯函数。
+画像 reducer 的唯一活动实现是 Reliable Drive Sync Worker 的 `services/reliable-drive-sync-worker/src/profile-model.js`。Python 核心不再提供 `validate_artifact`、`apply_review_event` 或 `rebuild_profile`。它只构造并校验 schema-1.2 事件、写本地报告副本，并提供与云端无关的领域解析与题源规划纯函数。
 
 Worker 只使用已验证且 `applyProfileChanges === true` 的复盘事件，按 `sessionId` 取最大 `reviewVersion`，生成不可变快照。事件已存在而快照缺失时，同一幂等键重试只补做投影。
 
