@@ -112,15 +112,17 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         self.assertIn("旧文件保留作为只读兼容数据", contract)
         self.assertIn("禁止调用任何“更新文件内容”的接口", runtime)
 
-    def test_daily_protocol_preserves_unfinished_work_and_aborts_on_drive_failure(self):
+    def test_daily_protocol_preserves_unfinished_work_and_uses_outbox_recovery(self):
         protocol = self._read("algorithm-daily-protocol.md")
         for required in (
             "未完成题",
             "3～5",
-            "不生成题单",
             "不宣称已同步画像",
             "追加式创建",
             "submit_event",
+            "D1 Outbox",
+            "SQLite",
+            "自动恢复",
         ):
             self.assertIn(required, protocol)
 
@@ -143,10 +145,11 @@ class AlgorithmLearningSkillContractTests(unittest.TestCase):
         self.assertNotIn("current snapshot", template)
         self.assertNotIn("Drive 根目录", template)
 
-    def test_pending_status_distinguishes_event_from_snapshot_failure(self):
+    def test_outbox_statuses_distinguish_local_and_cloud_acceptance_from_drive_completion(self):
         skill = self._skill()
-        self.assertIn("cloud_persistence_pending", skill)
-        self.assertIn("profile_cache_pending", skill)
+        for required in ("deliveryState", "cloud_accepted", "pending", "SQLite", "D1 Outbox"):
+            self.assertIn(required, skill)
+        self.assertNotIn("receipt.fileId", skill)
 
     def test_historical_documents_are_marked_superseded(self):
         self.assertEqual(4, len(HISTORICAL_REFERENCES))

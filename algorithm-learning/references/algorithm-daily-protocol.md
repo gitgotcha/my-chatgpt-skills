@@ -9,10 +9,10 @@
 5. 选题时避免 7 日内重复同一题；Hot100、代码随想录与用户历史错误题为候选来源。当前专题来自 `currentTopic`；综合/变式必须关联至少一个已学专题。
 6. 题单经 `submit_event` 的 `algorithm.daily-plan-created` 提交，由 Worker 只创建唯一文件
    `daily-plan-YYYY-MM-DD-<planId>.json`，落在 `users/<userId>/algorithm/plans/daily/`，并读回校验。
-   事件写入失败时返回 `cloud_persistence_pending`；事件已保存但快照或题单缓存失败时返回 `profile_cache_pending`。
-   任一失败时**不生成题单推送**、**不宣称已同步画像**，次日从事件恢复。
+   本地回执只解释两级 Outbox：`deliveryState: "cloud_accepted"` 表示 D1 Outbox 已接收，`pending` 表示事件仍在 SQLite 等待重试；两者的 Drive 写入都异步完成。
+   任一状态都**不宣称已同步画像或 Drive 已完成**，后续由 Outbox 自动恢复。
 7. 输出仅包含今日 3～5 题、每题角色/目标、打卡格式与未完成题提示；不要泄露完整解答。
 
-严格说明：Google Drive 不提供事务。追加式创建使事件事实具备原子可见性；快照和题单只是可重建缓存。任何半完成状态都不称成功。
+严格说明：D1 接收与 Google Drive 完成不是同一状态。追加式创建使最终事件事实具备原子可见性；快照和题单只是可重建缓存。Skill 不根据 Outbox 回执宣称 Drive 已完成。
 
 当日题单首次创建后不可变：当天已存在题单时原样返回，不重新生成。任务只调用 `submit_event`，不得直接读写 Drive。

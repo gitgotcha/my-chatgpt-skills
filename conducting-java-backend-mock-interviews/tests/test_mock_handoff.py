@@ -116,14 +116,19 @@ class MockHandoffTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
             output_root = Path(temporary_directory)
-            path = save_session_copy(event, output_root, "ok", {"fileId": "drive-1"})
+            receipt = {
+                "deliveryState": "cloud_accepted",
+                "persistence": {"localOutbox": "acknowledged", "cloudOutbox": "accepted", "drive": "pending"},
+            }
+            path = save_session_copy(event, output_root, "cloud_accepted", receipt)
             self.assertEqual(
                 path,
                 output_root / "interview" / USER_ID / f"interview-{SESSION_ID}-session.json",
             )
             saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["persistenceStatus"], "ok")
-            self.assertEqual(saved["driveReceipt"], {"fileId": "drive-1"})
+            self.assertEqual(saved["persistenceStatus"], "cloud_accepted")
+            self.assertEqual(saved["outboxReceipt"], receipt)
+            self.assertNotIn("driveReceipt", saved)
             self.assertEqual(saved["eventKey"], event["eventKey"])
 
     def test_cloud_failure_still_writes_pending_local_copy(self) -> None:
@@ -135,10 +140,10 @@ class MockHandoffTests(unittest.TestCase):
             session_id=SESSION_ID,
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = save_session_copy(event, temporary_directory, "cloud_persistence_pending")
+            path = save_session_copy(event, temporary_directory, "pending")
             saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["persistenceStatus"], "cloud_persistence_pending")
-            self.assertNotIn("driveReceipt", saved)
+            self.assertEqual(saved["persistenceStatus"], "pending")
+            self.assertNotIn("outboxReceipt", saved)
 
     def test_session_event_never_embeds_local_output_paths(self) -> None:
         event = create_mock_session_event(
@@ -149,7 +154,7 @@ class MockHandoffTests(unittest.TestCase):
             session_id=SESSION_ID,
         )
         # The submitted event must stay free of local copy bookkeeping.
-        for forbidden in ("persistenceStatus", "driveReceipt"):
+        for forbidden in ("persistenceStatus", "outboxReceipt", "driveReceipt"):
             self.assertNotIn(forbidden, event)
         serialized = json.dumps(event, ensure_ascii=False)
         for forbidden in ("outputs/", "output_root", "interview-", ".json"):
@@ -165,7 +170,7 @@ class MockHandoffTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
             output_root = Path(temporary_directory)
-            path = save_session_copy(event, output_root, "ok")
+            path = save_session_copy(event, output_root, "cloud_accepted")
             self.assertTrue(path.is_relative_to(output_root))
 
     def test_handoff_module_imports_only_safe_stdlib(self) -> None:

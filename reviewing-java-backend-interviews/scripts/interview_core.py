@@ -194,7 +194,7 @@ def save_review_json(
     review_event: dict[str, object],
     output_root: str | Path,
     persistence_status: str,
-    drive_receipt: dict[str, object] | None = None,
+    outbox_receipt: dict[str, object] | None = None,
 ) -> Path:
     """Write a portable local report JSON; it is never a profile input."""
     if not isinstance(review_event, dict) or review_event.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
@@ -205,15 +205,15 @@ def save_review_json(
         raise ReviewValidationError("review event requires a UUID userId")
     if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
         raise ReviewValidationError("review event requires a safe sessionId")
-    if persistence_status not in {"ok", "cloud_persistence_pending", "profile_cache_pending"}:
+    if persistence_status not in {"cloud_accepted", "pending"}:
         raise ReviewValidationError("unsupported persistenceStatus")
     destination = Path(output_root) / "interview" / user_id
     destination.mkdir(parents=True, exist_ok=True)
     path = destination / f"interview-{session_id}-report.json"
     payload = deepcopy(review_event)
     payload["persistenceStatus"] = persistence_status
-    if drive_receipt is not None:
-        payload["driveReceipt"] = deepcopy(drive_receipt)
+    if outbox_receipt is not None:
+        payload["outboxReceipt"] = deepcopy(outbox_receipt)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
 

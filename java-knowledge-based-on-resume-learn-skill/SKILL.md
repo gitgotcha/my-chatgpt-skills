@@ -22,8 +22,9 @@ description: "Drill Java backend interview knowledge strictly grounded in the us
 
 1. 每次会话先取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
 2. 调用唯一 MCP 工具 `submit_event`，由 Worker 按标准化姓名解析或注册稳定的全局 `userId`。姓名与已有 `userId` 不一致时以 Worker 返回的 `identity_mismatch` 为准并停止。
-3. 所有云端写入只经 `submit_event`。本技能不接触 Google Drive；Worker 是唯一写入者，写入失败时停止，不回退到旧目录。
-4. 定时任务由用户自行创建。本技能不得创建、修改或管理定时任务；每日模板只描述用户已有的调用入口。
+3. 所有写入只经 `submit_event`：本地 MCP 先写 SQLite Outbox，Worker `/v1/jobs` 再接收入 D1 Outbox，QStash/Worker 最后异步写 Google Drive。本技能不接触 Drive，也不回退到旧目录。
+4. 只按回执 `deliveryState` 报告保存状态：`cloud_accepted` 表示 SQLite 已落盘且 D1 Outbox 已接收，但 `persistence.drive` 仍为 `pending`；`pending` 表示仅确认 SQLite 持久排队。前者可称“已进入云端队列”，后者称“已在本机排队”，两者都不得称“Drive 已保存”，也不由 Skill 手工重发。
+5. 定时任务由用户自行创建。本技能不得创建、修改或管理定时任务；每日模板只描述用户已有的调用入口。
 
 ## 证据分级
 

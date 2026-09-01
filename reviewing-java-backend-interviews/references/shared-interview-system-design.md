@@ -8,11 +8,11 @@
 
 ## 运行时与交接
 
-两个 Skill 都不直接调用 Google Drive。它们只构造 schema-1.2 事件并调用唯一暴露的 `submit_event`；Worker 负责校验、解析用户、追加事件和物化快照。
+两个 Skill 都不直接调用 Google Drive。它们只构造 schema-1.2 事件并调用本地唯一工具 `submit_event`；本地 SQLite Outbox、D1 Outbox 与 QStash/Worker 依次负责持久接收、重试、追加事件和物化快照。
 
 模拟 Skill 固化 `MOCK-*` 会话事件并置为 `review_pending`，会话内不生成画像快照。reviewing 消费该不可变会话，产生统一 Review、本地报告和画像变化事件。真实面试由 reviewing 直接接收 `REAL-*` 会话：默认生成 Review、报告和待确认的画像变化预览，只有用户确认才应用事件；模拟 Review 的已校验事件自动应用。
 
-云端不可用时状态为 `cloud_persistence_pending`，快照失败为 `profile_cache_pending`，且不把本地临时路径称作已持久化。
+本地回执状态为 `deliveryState: "cloud_accepted"` 或 `pending`：前者只确认 D1 Outbox，后者只确认 SQLite。两者均不表示 Drive 或快照已完成，且不把本地报告路径称作云端持久化。
 
 ## 数据协议
 

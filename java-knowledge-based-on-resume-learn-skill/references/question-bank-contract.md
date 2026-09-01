@@ -2,7 +2,7 @@
 
 题库关系：`简历声明 -> 知识点 -> 规范题目 -> 推荐回答链 -> 评分要点`。
 
-题库通过 `submit_event` 提交 `resume-knowledge.question-bank-created` 事件，由 Worker 物化到 `users/<userId>/resume-knowledge/question-bank/snapshots/`。技能只负责生成，不负责存储。
+题库通过 `submit_event` 提交 `resume-knowledge.question-bank-created` 事件，先进入 SQLite 与 D1 Outbox，再由 Worker 异步物化到 `users/<userId>/resume-knowledge/question-bank/snapshots/`。技能只负责生成，不负责存储，也不根据队列回执声称 Drive 已完成。
 
 ## 知识域
 

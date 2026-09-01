@@ -38,4 +38,4 @@
 
 - 只返回题面，不提前暴露评分点与参考回答。
 - 题单创建后当日不变，当天上传的新简历从下一个尚未创建题单的日期生效。
-- 持久化只经 `submit_event`；写入失败时明确说明未保存。
+- 持久化只经 `submit_event`；`cloud_accepted` 时说明已进入 D1 Outbox，`pending` 时说明已在 SQLite 排队，不宣称 Drive 已完成。

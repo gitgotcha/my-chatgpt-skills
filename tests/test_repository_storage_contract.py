@@ -52,6 +52,7 @@ SKIP_DIRECTORIES = frozenset({
     ".mypy_cache",
     ".venv",
     "venv",
+    ".worktrees",
     ".superpowers",
 })
 
@@ -108,6 +109,20 @@ class RepositoryStorageContractTest(unittest.TestCase):
 
     def test_legacy_cloud_mcp_directory_is_removed(self):
         self.assertFalse((REPOSITORY_ROOT / "cloud-mcp").exists())
+
+    def test_every_submit_event_skill_uses_outbox_receipt_semantics(self):
+        skill_files = (
+            "algorithm-learning/SKILL.md",
+            "conducting-java-backend-mock-interviews/SKILL.md",
+            "reviewing-java-backend-interviews/SKILL.md",
+            "java-knowledge-based-on-resume-learn-skill/SKILL.md",
+        )
+        for relative in skill_files:
+            text = (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(skill=relative):
+                for required in ("deliveryState", "cloud_accepted", "pending", "SQLite", "D1 Outbox"):
+                    self.assertIn(required, text)
+                self.assertNotIn("receipt.fileId", text)
 
     def test_no_active_file_uses_retired_storage_paths(self):
         offenders = []

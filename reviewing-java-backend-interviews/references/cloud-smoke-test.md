@@ -2,7 +2,7 @@
 
 状态：**未验证**。fake Drive 与临时目录只是测试替身；不得以本地模拟替代真实云端成功。
 
-只有运行时提供可用的 Google Drive 连接器与用户确认的根目录时才执行本清单。否则不发起任何写入，保留原始会话并返回 `cloud_persistence_pending` 或 `review_pending`。
+只有运行时提供隔离测试身份且用户确认时才执行本清单。普通 Skill 调用只验证本地 `deliveryState` 为 `cloud_accepted` 或 `pending`，不得把 Outbox 接收当作真实 Drive 冒烟成功；业务会话仍可保持 `review_pending`。
 
 1. 使用完全虚构的隔离姓名注册测试用户，取得独立的 `userId`，不读取或修改真实用户数据。
 2. 记录本次创建的规范路径与本地副本的完整路径：

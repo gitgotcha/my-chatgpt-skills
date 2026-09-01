@@ -1,6 +1,6 @@
 # Google Drive 运行时存储约定
 
-本项目已选择用户授权的 Google Drive 作为正式云端后端。**技能不直接读写 Drive**：所有云端写入只经 MCP 暴露的唯一工具 `submit_event`，由 Cloudflare Worker 执行。本 Skill 只构造事件内容、读取回执并生成本地报告。
+本项目以用户授权的 Google Drive 作为最终云端后端。**技能不直接读写 Drive**：唯一工具 `submit_event` 先写本机 SQLite Outbox，再由 `/v1/jobs` 接收入 D1 Outbox，Cloudflare Worker 异步执行最终写入。本 Skill 只构造事件、读取 Outbox 回执并生成本地报告。
 
 ## 唯一规范根
 
@@ -37,7 +37,7 @@ DriveRoot/my-chatGPT-skills/
 1. 先按姓名解析用户，取得规范化的 `{userId, username}` 绑定。
 2. 构造唯一 `interview.review.completed` 事件，只调用一次 `submit_event`。
 3. Worker 追加事件、读回校验父目录与内容，再物化快照。
-4. 响应包含真实回执时标记 `persistenceStatus: "ok"`；整体写入失败标记 `cloud_persistence_pending`；事件已保存但快照失败标记 `profile_cache_pending`。
+4. 按 `deliveryState` 标记本地副本：D1 Outbox 已接收为 `persistenceStatus: "cloud_accepted"`，仅 SQLite 持久排队为 `persistenceStatus: "pending"`。保存 `outboxReceipt`，不保存或要求 Drive 文件回执。
 
 事件已存在而快照缺失时，用同一幂等键重试只会补做投影，不会重复追加事件。写入失败时停止，绝不回退到旧 namespace 目录，也不得把本地路径或测试替身称为已保存。
 

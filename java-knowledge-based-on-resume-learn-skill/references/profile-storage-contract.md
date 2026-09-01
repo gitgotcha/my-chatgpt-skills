@@ -1,6 +1,8 @@
 # 画像与存储契约
 
-所有持久化只通过 `submit_event` 提交，由 Worker 校验并物化。技能不直接访问存储层，也不得在写入失败时回退到旧目录。
+所有持久化只通过 `submit_event` 提交：本地 MCP 先写 SQLite Outbox，Worker `/v1/jobs` 再写 D1 Outbox，QStash/Worker 异步校验并物化到 Drive。技能不直接访问存储层，也不得回退到旧目录。
+
+本地回执 `deliveryState: "cloud_accepted"` 只确认 D1 Outbox 接收；`pending` 只确认 SQLite 持久排队。两者都不证明 Drive 或派生快照已经完成。
 
 ## 规范目录
 

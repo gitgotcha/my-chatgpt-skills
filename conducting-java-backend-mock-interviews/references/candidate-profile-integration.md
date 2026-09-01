@@ -6,4 +6,4 @@
 
 会话事件由 Worker 追加到 `my-chatGPT-skills/users/<userId>/interview/events/`。结束时只生成 `mock_interview` 原始会话，包含 `MOCK-*` ID、`evidence_type: system_transcript`、`evidence_confidence: 0.6`、逐题元数据、回答、交接目标和 `review_pending`。模拟 Skill 不生成 `evidence_delta`、不创建画像快照、不更新画像。由 reviewing Skill 消费交接后，才依据统一 Review 创建确定性事件。
 
-云端不可用时会话保留为 `cloud_persistence_pending` 或 `review_pending`；不得退回到本机硬编码目录，也不得静默切换到另一个用户。
+提交回执为 `deliveryState: "pending"` 时，会话已在本机 SQLite Outbox 持久排队；`cloud_accepted` 时已进入 D1 Outbox，但 Drive 仍异步处理。会话业务状态保持 `review_pending`；不得退回旧目录、直接写 Drive或静默切换用户。

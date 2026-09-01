@@ -44,13 +44,13 @@ DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/events/
 DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/profile/snapshots/
 ```
 
-The Worker exposes exactly one public tool, `submit_event`; removed candidate and
-artifact tools are not supported. New records are append-only JSON in a Google
-Shared Drive. A successful write is reported only after Drive readback returns a
-real file ID. `status: "ok"` means the event and any requested projection
-completed; `cloud_persistence_pending` means the local copy exists but the cloud
-event did not; `profile_cache_pending` means the event is durable but rebuilding
-the snapshot failed. Never claim persistence after an error.
+The local stdio MCP exposes exactly one tool, `submit_event`; removed candidate
+and artifact tools are not supported. Every write is staged in the local SQLite
+Outbox, accepted through Worker `/v1/jobs` into the D1 Outbox, and delivered
+asynchronously by QStash/Worker. `deliveryState: "cloud_accepted"` means D1
+accepted a durable job, not that Drive finished; `deliveryState: "pending"`
+means SQLite still holds the event for retry. Skills must never require a Drive
+file ID, claim Drive completion from either receipt, or bypass the Outboxes.
 
 Local portable outputs are not profile inputs:
 

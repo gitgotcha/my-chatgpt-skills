@@ -105,9 +105,9 @@ users/<userId>/algorithm/plans/daily/
 
 1. 调用 `submit_event` 时先按姓名解析或注册用户，锁定 `userId` 与规范化 `username`。
 2. 列出、校验并按 `eventKey` 去重全部事件。
-3. 若没有同键事件，创建唯一事件文件并读回。事件未读回时返回 `cloud_persistence_pending`，不得称已记录。
-4. 事件已读回后，Worker 从完整事件集创建唯一快照；快照读回成功才可称“已同步画像”。
-5. 快照创建或读回失败时返回 `profile_cache_pending`：学习事件已保存，画像将在下次读取时重建。同一幂等键重试只补做投影，不重复追加事件。
+3. 本地 `submit_event` 先写 SQLite；D1 Outbox 接收后返回 `deliveryState: "cloud_accepted"`，未接收时返回 `pending`。两者都不等于 Drive 读回完成。
+4. QStash/Worker 异步创建唯一事件文件，再从完整事件集创建快照；Skill 不等待该内部状态。
+5. 同一 `requestId` 的重试由 SQLite 与 D1 Outbox 幂等处理，不重复追加事件。
 6. 任何写入失败都不得回退到旧 namespace 目录，也不得让 Skill 直接调用 Drive。
 
 ## 题单与打卡

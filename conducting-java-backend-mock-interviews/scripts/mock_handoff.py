@@ -143,7 +143,7 @@ def save_session_copy(
     event: dict[str, object],
     output_root: str | Path,
     persistence_status: str,
-    drive_receipt: dict[str, object] | None = None,
+    outbox_receipt: dict[str, object] | None = None,
 ) -> Path:
     """Write the portable session copy below ``outputs/interview/<userId>``."""
     if not isinstance(event, dict) or event.get("schemaVersion") != SCHEMA_VERSION:
@@ -154,14 +154,14 @@ def save_session_copy(
         raise HandoffValidationError("session event requires a UUID userId")
     if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
         raise HandoffValidationError("session event requires a safe sessionId")
-    if persistence_status not in {"ok", "cloud_persistence_pending"}:
-        raise HandoffValidationError("persistenceStatus must be ok or cloud_persistence_pending")
+    if persistence_status not in {"cloud_accepted", "pending"}:
+        raise HandoffValidationError("persistenceStatus must be cloud_accepted or pending")
     destination = Path(output_root) / "interview" / user_id
     destination.mkdir(parents=True, exist_ok=True)
     path = destination / f"interview-{session_id}-session.json"
     payload: dict[str, Any] = deepcopy(event)
     payload["persistenceStatus"] = persistence_status
-    if drive_receipt is not None:
-        payload["driveReceipt"] = deepcopy(drive_receipt)
+    if outbox_receipt is not None:
+        payload["outboxReceipt"] = deepcopy(outbox_receipt)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

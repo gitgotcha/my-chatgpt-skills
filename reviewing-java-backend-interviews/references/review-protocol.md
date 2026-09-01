@@ -12,7 +12,7 @@
 4. Worker 物化快照到 `users/<userId>/interview/profile/snapshots/`；本 Skill 不创建快照。
 5. 生成本地 JSON 与 DOCX 报告并做渲染检查。
 
-模拟 Review 自动应用画像变化；真实 Review 默认生成待确认的预览，用户确认后应用，拒绝后保持 `rejected` 且不改变画像。云端不可用时标记 `cloud_persistence_pending`，快照失败标记 `profile_cache_pending`，明确阻断，不得将本地临时文件冒充云端资料。
+模拟 Review 自动应用画像变化；真实 Review 默认生成待确认的预览，用户确认后应用，拒绝后保持 `rejected` 且不改变画像。提交回执按 `deliveryState` 记录为 `cloud_accepted`（D1 Outbox 已接收）或 `pending`（SQLite 持久排队）；两者都不得将本地文件或队列回执冒充 Drive 已完成。
 
 ## 修正与版本
 

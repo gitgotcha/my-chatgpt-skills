@@ -192,7 +192,7 @@ class ReviewEventContractTests(unittest.TestCase):
 class LocalReportCopyTests(unittest.TestCase):
     def test_save_review_json_writes_below_the_user_id_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = save_review_json(_review_event(), Path(temporary_directory), "ok")
+            path = save_review_json(_review_event(), Path(temporary_directory), "cloud_accepted")
             self.assertEqual(
                 path,
                 Path(temporary_directory) / "interview" / USER_ID / f"interview-{SESSION_ID}-report.json",
@@ -202,12 +202,16 @@ class LocalReportCopyTests(unittest.TestCase):
     def test_saved_copy_records_persistence_status_and_receipt(self) -> None:
         import json
 
-        receipt = {"fileId": "drive-file-1"}
+        receipt = {
+            "deliveryState": "cloud_accepted",
+            "persistence": {"localOutbox": "acknowledged", "cloudOutbox": "accepted", "drive": "pending"},
+        }
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = save_review_json(_review_event(), Path(temporary_directory), "profile_cache_pending", receipt)
+            path = save_review_json(_review_event(), Path(temporary_directory), "cloud_accepted", receipt)
             payload = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["persistenceStatus"], "profile_cache_pending")
-            self.assertEqual(payload["driveReceipt"], receipt)
+            self.assertEqual(payload["persistenceStatus"], "cloud_accepted")
+            self.assertEqual(payload["outboxReceipt"], receipt)
+            self.assertNotIn("driveReceipt", payload)
             self.assertEqual(payload["userId"], USER_ID)
             self.assertEqual(payload["sessionId"], SESSION_ID)
             self.assertEqual(payload["reviewVersion"], 1)
@@ -217,14 +221,14 @@ class LocalReportCopyTests(unittest.TestCase):
         event["schemaVersion"] = "1.0"
         with tempfile.TemporaryDirectory() as temporary_directory:
             with self.assertRaisesRegex(ReviewValidationError, "schemaVersion 1.2"):
-                save_review_json(event, Path(temporary_directory), "ok")
+                save_review_json(event, Path(temporary_directory), "cloud_accepted")
 
     def test_save_review_json_rejects_unsafe_session_id_and_unknown_status(self) -> None:
         event = _review_event()
         event["sessionId"] = "MOCK/../escape"
         with tempfile.TemporaryDirectory() as temporary_directory:
             with self.assertRaisesRegex(ReviewValidationError, "safe sessionId"):
-                save_review_json(event, Path(temporary_directory), "ok")
+                save_review_json(event, Path(temporary_directory), "cloud_accepted")
             with self.assertRaisesRegex(ReviewValidationError, "unsupported persistenceStatus"):
                 save_review_json(_review_event(), Path(temporary_directory), "saved")
 

@@ -178,6 +178,12 @@ class JavaResumeKnowledgeSkillContractTests(unittest.TestCase):
         for path in documents():
             self.assertIn("submit_event", path.read_text(encoding="utf-8"), path.name)
 
+    def test_skill_uses_local_and_cloud_outbox_receipts_without_claiming_drive_completion(self):
+        skill = self._skill()
+        for required in ("deliveryState", "cloud_accepted", "pending", "SQLite", "D1 Outbox"):
+            self.assertIn(required, skill)
+        self.assertIn("不得称“Drive 已保存”", skill)
+
     def test_no_document_writes_to_google_drive_directly(self):
         for path in documents():
             text = path.read_text(encoding="utf-8")

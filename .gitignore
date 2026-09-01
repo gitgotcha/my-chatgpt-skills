@@ -5,3 +5,4 @@ cloud-mcp/node_modules/
 **/__pycache__/
 *.pyc
 outputs/
+.worktrees/

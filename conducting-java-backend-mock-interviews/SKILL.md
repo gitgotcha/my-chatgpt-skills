@@ -5,7 +5,7 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 # Java 后端模拟面试
 
-本 Skill 负责按姓名解析用户、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、整场复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。云端持久化只通过 MCP 暴露的唯一工具 `submit_event` 完成。
+本 Skill 负责按姓名解析用户、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、整场复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。唯一工具 `submit_event` 先把事件写入本机 SQLite Outbox，再由 Worker `/v1/jobs` 接收入 D1 Outbox 并异步写 Drive。
 
 所有云端数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。模拟会话事件由 Worker 追加到 `users/<userId>/interview/events/`；本 Skill 不生成画像快照，也不在会话中更新画像。
 
@@ -46,7 +46,7 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 会话事件必须包含 `eventId`、`eventKey`、身份、时间、`status: "review_pending"`、`resumeContext` 以及题目数组。题目数组内保存原问题、原回答、追问和时间线，因此不再创建或上传独立 transcript 文件。
 
-只调用一次 `submit_event(interview.session.completed)`。Worker 把事件追加到 `my-chatGPT-skills/users/<userId>/interview/events/`，不创建画像快照。成功回执用于本地副本元数据；云端失败时仍写本地副本，并把 `persistenceStatus` 标为 `cloud_persistence_pending`，不得伪称云端已保存。
+只调用一次 `submit_event(interview.session.completed)`。按回执 `deliveryState` 写本地副本元数据：`cloud_accepted` 表示 SQLite 已落盘且 D1 Outbox 已接收，保存 `outboxReceipt`，但 `persistence.drive` 仍是 `pending`；`pending` 表示仅确认 SQLite 持久排队。对应的 `persistenceStatus` 只能是 `cloud_accepted` 或 `pending`。两者都不得伪称 Drive 已保存，也不由 Skill 手工重发；QStash/Worker 负责异步投递和重试。
 
 本地文件统一写入：
 

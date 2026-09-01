@@ -50,7 +50,7 @@ def _review_event() -> dict[str, object]:
         }],
         "recommendations": ["复测缓存一致性"],
         "applyProfileChanges": False,
-        "persistenceStatus": "ok",
+        "persistenceStatus": "cloud_accepted",
         "overallAssessment": "整体可用，缓存一致性需要补强。",
     }
 

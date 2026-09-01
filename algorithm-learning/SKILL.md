@@ -32,7 +32,7 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
 
-所有算法数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。本领域的事件、快照与每日题单分别位于 `users/<userId>/algorithm/events/`、`users/<userId>/algorithm/profile/snapshots/` 和 `users/<userId>/algorithm/plans/daily/`；写入失败时停止，不回退到旧目录。
+所有算法事件先由本地 MCP 写入 SQLite Outbox，再经 Worker `/v1/jobs` 进入 D1 Outbox，最后由 QStash/Worker 异步写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。本领域的事件、快照与每日题单分别位于 `users/<userId>/algorithm/events/`、`users/<userId>/algorithm/profile/snapshots/` 和 `users/<userId>/algorithm/plans/daily/`；Skill 不回退到旧目录，也不直接写 Drive。
 
 ### 按姓名解析用户
 
@@ -55,10 +55,7 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
    UUID `eventId`、`eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
 2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
 3. Worker 负责把事件追加到规范目录、按 `eventKey` 去重，并从全部已验证事件重建算法画像快照；Skill 不直接读写 Drive。
-4. `submit_event` 返回 `status:"ok"` 和真实 Drive `receipt.fileId` 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。
-   若返回 `cloud_persistence_pending`，表示本地事件已生成但云端事件尚未持久化；若返回
-   `profile_cache_pending`，表示事件已经持久化，但画像快照生成失败。两种状态都必须如实告知，
-   不得把待处理状态称为“已完成”。同一幂等键重试时只补做缺失的投影，不重复追加事件。
+4. 只按本地 MCP 的 `deliveryState` 解释提交结果：`cloud_accepted` 表示事件已先落 SQLite，且 D1 Outbox 已返回有效 `jobId`；可以称“已提交并进入云端队列”，但 `persistence.drive` 仍为 `pending`，不得称“Drive 已保存”。`pending` 表示事件仍安全保存在 SQLite、尚未确认进入 D1 Outbox；说明“已在本机排队等待重试”。两种状态都不要求 Skill 自行重发或直接访问 Drive，同一 `requestId` 由两级 Outbox 保证幂等。
 5. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为新事件；未完成题在下一日优先保留。
 
 ## 专项检查与回答前检查
@@ -68,5 +65,5 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 - 是否真正定位到用户代码的问题，并保持最小修改？
 - 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
 - 是否已通过姓名解析拿到已注册用户的 `userId`，并以事件记录明确证据？
-- 事件是否已返回 Drive 文件 ID？
+- 是否根据 `deliveryState` 准确区分 D1 Outbox 已接收与仅在 SQLite 排队，并避免声称 Drive 已完成？
 - 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？
