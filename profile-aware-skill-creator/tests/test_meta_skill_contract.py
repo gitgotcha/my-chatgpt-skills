@@ -209,5 +209,246 @@ class ProfileCapabilitySchemaTest(unittest.TestCase):
         self.assertNotIn(VALID_INSTANCE["domain"], RESERVED_DOMAINS)
 
 
+PROFILE_AUTHORING_STANDARD = SKILL_ROOT / "references" / "profile-authoring-standard.md"
+SUBMIT_EVENT_RUNTIME = SKILL_ROOT / "references" / "submit-event-runtime.md"
+PORTABLE_SKILL_STANDARD = SKILL_ROOT / "references" / "portable-skill-standard.md"
+
+REFERENCE_FILES = {
+    "profile-authoring-standard.md": PROFILE_AUTHORING_STANDARD,
+    "submit-event-runtime.md": SUBMIT_EVENT_RUNTIME,
+    "portable-skill-standard.md": PORTABLE_SKILL_STANDARD,
+}
+
+# The five logical operations of the generic profile protocol.
+PROFILE_OPERATIONS = [
+    "system.capabilities.read",
+    "system.user.resolve",
+    "system.user-registered",
+    "profile.snapshot.read",
+    "profile.evidence.recorded",
+]
+
+# Exact target file sets.
+PLAIN_FORBIDDEN_PATHS = [
+    "references/profile-contract.md",
+    "schemas/profile-capability.json",
+    "tests/test_profile_contract.py",
+]
+PROFILE_REQUIRED_PATHS = [
+    "references/profile-contract.md",
+    "schemas/profile-capability.json",
+    "tests/test_profile_contract.py",
+]
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+class ReferencesExistTest(unittest.TestCase):
+    """All three progressive-disclosure references must ship with the Skill."""
+
+    def test_all_references_exist(self) -> None:
+        for name, path in REFERENCE_FILES.items():
+            self.assertTrue(path.is_file(), f"missing reference: {name}")
+            self.assertGreater(len(_read(path)), 500, f"{name} is too small to be useful")
+
+
+class ProfileAuthoringStandardTest(unittest.TestCase):
+    """Behavioral contract of ``references/profile-authoring-standard.md``."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = _read(PROFILE_AUTHORING_STANDARD)
+
+    def test_documents_authoring_decision_record_in_order(self) -> None:
+        steps = [
+            "resolved target directory",
+            "plain/profile choice",
+            "reserved names",
+            "sourceSkill",
+            "dimensions",
+            "recordWhen",
+            "minimal added files",
+            "validation mode",
+        ]
+        positions = [self.text.lower().find(step.lower()) for step in steps]
+        for position, step in zip(positions, steps):
+            self.assertGreater(position, -1, f"decision-record step missing: {step}")
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "decision-record steps must appear in the documented order",
+        )
+
+    def test_capability_file_is_not_the_runtime_capability_event(self) -> None:
+        self.assertIn("profile-capability.json", self.text)
+        self.assertIn("system.capabilities.read", self.text)
+        self.assertIn("cannot substitute", self.text)
+
+    def test_safe_domain_rules_match_schema(self) -> None:
+        self.assertIn("^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$", self.text)
+        for reserved in RESERVED_DOMAINS:
+            self.assertIn(reserved, self.text)
+
+    def test_evidence_collection_rules(self) -> None:
+        for outcome in ["observed", "stuck", "partial", "correct"]:
+            self.assertIn(outcome, self.text)
+        self.assertIn("recordWhen", self.text)
+        self.assertIn("doNotRecordWhen", self.text)
+
+    def test_exact_target_file_sets(self) -> None:
+        for path in PROFILE_REQUIRED_PATHS:
+            self.assertIn(path, self.text)
+        self.assertIn("must not", self.text.lower())
+
+    def test_preservation_rules_for_existing_directories(self) -> None:
+        self.assertIn("existing", self.text.lower())
+        self.assertIn("preserve", self.text.lower())
+        self.assertIn("unrelated", self.text.lower())
+
+
+class SubmitEventRuntimeTest(unittest.TestCase):
+    """Behavioral contract of ``references/submit-event-runtime.md``."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = _read(SUBMIT_EVENT_RUNTIME)
+
+    def test_contains_concrete_envelopes_for_all_five_operations(self) -> None:
+        for operation in PROFILE_OPERATIONS:
+            self.assertIn(f'"eventType": "{operation}"', self.text,
+                          f"missing concrete envelope for {operation}")
+
+    def test_envelope_versions_are_documented(self) -> None:
+        self.assertIn('"schemaVersion": "1.2"', self.text)
+        self.assertIn('"schemaVersion": "1.0"', self.text)
+
+    def test_runtime_sequence_is_documented_in_order(self) -> None:
+        start = self.text.find("## Runtime sequence")
+        end = self.text.find("## Operation 1", start)
+        section = self.text[start:end]
+        self.assertGreater(start, -1, "runtime sequence section missing")
+        sequence = [
+            "system.capabilities.read",
+            "system.user.resolve",
+            "system.user-registered",
+            "profile.snapshot.read",
+            "profile.evidence.recorded",
+        ]
+        positions = [section.find(step) for step in sequence]
+        for position, step in zip(positions, sequence):
+            self.assertGreater(position, -1, f"sequence step missing: {step}")
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "runtime sequence must be documented in order",
+        )
+
+    def test_async_receipt_wording_without_drive_fileid_promise(self) -> None:
+        self.assertIn("pending", self.text)
+        self.assertIn("cloud_accepted", self.text)
+        self.assertIn("fileId", self.text)
+        self.assertIn("must not", self.text.lower())
+
+    def test_identical_envelopes_across_platforms(self) -> None:
+        lowered = self.text.lower()
+        for platform in PLATFORMS:
+            self.assertIn(platform.lower(), lowered)
+        self.assertIn("identical", lowered)
+
+    def test_fail_closed_when_capability_or_identity_unavailable(self) -> None:
+        self.assertIn("unsupported_capability", self.text)
+        self.assertIn("identity_not_found", self.text)
+        self.assertIn("fail", self.text.lower())
+
+    def test_error_semantics_documented(self) -> None:
+        for error in [
+            "user_conflict",
+            "identity_mismatch",
+            "invalid_domain",
+            "invalid_profile_event",
+            "event_key_conflict",
+            "target_event_not_found",
+            "target_event_inactive",
+        ]:
+            self.assertIn(error, self.text)
+
+    def test_no_direct_drive_access_or_snapshot_overwrite(self) -> None:
+        self.assertIn("submit_event", self.text)
+        self.assertIn("Google Drive connector", self.text)
+        self.assertIn("overwrite", self.text.lower())
+
+    def test_correction_examples_follow_rules(self) -> None:
+        self.assertIn("supersede", self.text)
+        self.assertIn("invalidate", self.text)
+        self.assertIn("targetEventKey", self.text)
+        self.assertIn("evidenceRefs", self.text)
+
+    def test_no_personal_absolute_paths_or_drive_ids(self) -> None:
+        for forbidden in [
+            "C:\\Users\\",
+            "/Users/",
+            "/home/",
+            "/root/",
+            "drive.google.com",
+        ]:
+            self.assertNotIn(forbidden, self.text)
+
+
+class PortableSkillStandardTest(unittest.TestCase):
+    """Behavioral contract of ``references/portable-skill-standard.md``."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = _read(PORTABLE_SKILL_STANDARD)
+
+    def test_base_skill_shape(self) -> None:
+        self.assertIn("SKILL.md", self.text)
+        self.assertIn("name", self.text)
+        self.assertIn("description", self.text)
+        self.assertIn("progressive disclosure", self.text.lower())
+        self.assertIn("hyphen", self.text.lower())
+
+    def test_target_path_authority(self) -> None:
+        lowered = self.text.lower()
+        self.assertTrue(
+            "target path" in lowered or "target-path" in lowered,
+            "target path authority must be documented",
+        )
+        self.assertIn("authorit", lowered)
+
+    def test_update_in_place_preservation(self) -> None:
+        self.assertIn("update", self.text.lower())
+        self.assertIn("preserv", self.text.lower())
+
+    def test_deterministic_validation(self) -> None:
+        self.assertIn("validation", self.text.lower())
+        self.assertIn("deterministic", self.text.lower())
+
+    def test_routing_to_skill_creator_when_available(self) -> None:
+        self.assertIn("$skill-creator", self.text)
+
+    def test_openai_yaml_is_optional_adapter(self) -> None:
+        self.assertIn("agents/openai.yaml", self.text)
+        self.assertIn("optional", self.text.lower())
+
+    def test_platform_syntax_differs_but_envelope_identical(self) -> None:
+        lowered = self.text.lower()
+        for platform in PLATFORMS:
+            self.assertIn(platform.lower(), lowered)
+        self.assertIn("envelope", lowered)
+
+    def test_no_personal_absolute_paths_or_drive_ids(self) -> None:
+        for forbidden in [
+            "C:\\Users\\",
+            "/Users/",
+            "/home/",
+            "/root/",
+            "drive.google.com",
+        ]:
+            self.assertNotIn(forbidden, self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
