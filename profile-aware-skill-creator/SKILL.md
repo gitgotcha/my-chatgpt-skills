@@ -20,9 +20,10 @@ If the current request does not already state the answer, ask exactly one
 question before creating anything: does this Skill need to save and read a
 person profile across sessions? Honor an answer that is already explicit —
 never re-ask, and never decide for the user. That routing question is the only
-question you may ask. Do not stop to request design approval or any other
-go-ahead; create the Skill and validate it, and never end a turn on a question
-once the path and the routing answer are known.
+routing question. When the target path, routing answer, and sufficient
+requirements for safe implementation are known, do not stop to request design
+approval or any other go-ahead — create the Skill and validate it. When a
+genuinely necessary input is missing, ask for it.
 
 The answer gates two mutually exclusive branches. Creating or updating a Skill
 performs no identity or profile operations of its own.

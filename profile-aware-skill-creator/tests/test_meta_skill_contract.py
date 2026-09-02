@@ -510,19 +510,26 @@ class MetaSkillEntrypointTest(unittest.TestCase):
         self.assertIn("preserv", lowered)
         self.assertIn("inspect", lowered)
 
-    def test_routing_question_is_the_only_question_no_design_approval(self) -> None:
-        """Regression from the GREEN forward test, case 2 attempt 2.
+    def test_no_design_approval_when_sufficient_but_ask_when_missing(self) -> None:
+        """Regression from ca26e16 — made conditional per user ruling.
 
-        A fresh agent stopped to ask "confirm this design?" instead of
-        creating the Skill. Under a non-interactive dispatcher the session
-        then ended with exit code 0 and zero artifacts, which reads like
-        success. The entrypoint must forbid ending on a design-approval
-        question once the path and the routing answer are known.
+        When the target path, the routing answer, and sufficient requirements
+        are already known, the agent must not stop to request design approval.
+        But when a genuinely necessary input is missing (e.g., the target path
+        was not specified), the agent may ask for it. The unconditional "never
+        request design approval" was too absolute and blocked legitimate asks.
         """
         # Collapse whitespace: the guidance may wrap across source lines.
         flattened = " ".join(self.body.lower().split())
-        self.assertIn("only question", flattened)
+        # The routing question is still the only routing question.
+        self.assertIn("only", flattened)
+        self.assertIn("routing question", flattened)
+        # Design approval is still forbidden — but conditionally.
         self.assertIn("approval", flattened)
+        # The condition: sufficient requirements for safe implementation are known.
+        self.assertIn("sufficient", flattened)
+        # The exception: missing necessary input may be asked for.
+        self.assertIn("missing", flattened)
 
     def test_frontmatter_contract_is_not_overridable_by_an_initializer(self) -> None:
         """Regression from the GREEN forward test, case 2 (fresh agent).
