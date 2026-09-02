@@ -90,6 +90,27 @@ authoritative user state:
   link-bearing change rather than rewriting it.
 - Never re-run a base initializer over an existing Skill.
 
+## Contract test requirements
+
+The generated `tests/test_profile_contract.py` is a forward test, not a
+formality. It must execute and must cover all four runtime behaviors of the
+profile contract; a placeholder (for example a single `self.assertTrue(True)`)
+is rejected by the validator. Each behavior must appear in the test source by
+an unambiguous token, and at least four tests must run and pass:
+
+1. **Capability preflight and fail-closed** — call `system.capabilities.read`
+   before any profile operation; when the capability is unsupported, continue
+   the business task without profile features.
+2. **User consent before profile mutation** — resolve the user with
+   `system.user.resolve`, and only call `system.user-registered` after explicit
+   consent; never auto-register.
+3. **Immutable, read-only evidence** — emit only `profile.evidence.recorded`
+   events; `profile.snapshot.read` is read-only and the Skill never writes or
+   overwrites a snapshot; no direct Drive or file-path access.
+4. **Full scan and preservation of existing files** — when updating an existing
+   Skill, read every existing file before writing, preserve unrelated files
+   byte-for-byte, and never re-run a base initializer.
+
 ## Validation
 
 After generation, run the meta Skill's validator in profile mode and run the

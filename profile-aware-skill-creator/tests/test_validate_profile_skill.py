@@ -93,7 +93,23 @@ PROFILE_TEST_PY = """import unittest
 
 
 class ProfileContractTest(unittest.TestCase):
-    def test_placeholder_real_assertions_run_here(self) -> None:
+    def test_capabilities_preflight_fail_closed(self) -> None:
+        # system.capabilities.read runs before any profile op; when the
+        # capability is unsupported the business task continues without profile.
+        self.assertTrue(True)
+
+    def test_user_consent_before_registration(self) -> None:
+        # system.user.resolve, then explicit consent before system.user-registered.
+        self.assertTrue(True)
+
+    def test_evidence_is_immutable_and_read_only(self) -> None:
+        # only profile.evidence.recorded events; profile.snapshot.read is
+        # read-only and the Skill never overwrites a snapshot.
+        self.assertTrue(True)
+
+    def test_full_scan_preserves_existing_files(self) -> None:
+        # every existing file is read before writing; unrelated files are
+        # preserved byte-for-byte and a base initializer is never re-run.
         self.assertTrue(True)
 """
 
@@ -198,6 +214,30 @@ class ValidatorBehaviorTest(unittest.TestCase):
             (skill_dir / "schemas" / "profile-capability.json").unlink()
             errors = self.validator.validate_skill(skill_dir, "profile")
             self.assertTrue(any("profile-capability.json" in e for e in errors))
+
+    def test_profile_mode_rejects_placeholder_contract_test(self) -> None:
+        # A placeholder test (single self.assertTrue) must be rejected: it
+        # covers none of the four required behaviors and collects too few tests.
+        placeholder = (
+            "import unittest\n\n\n"
+            "class ProfileContractTest(unittest.TestCase):\n"
+            "    def test_placeholder_real_assertions_run_here(self) -> None:\n"
+            "        self.assertTrue(True)\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_profile_skill(Path(tmp))
+            (skill_dir / "tests" / "test_profile_contract.py").write_text(
+                placeholder, encoding="utf-8"
+            )
+            errors = self.validator.validate_skill(skill_dir, "profile")
+            self.assertTrue(
+                any("contract behavior not covered" in e for e in errors),
+                f"expected behavior-coverage errors, got {errors}",
+            )
+            self.assertTrue(
+                any("tests collected" in e for e in errors),
+                f"expected insufficient-test-count error, got {errors}",
+            )
 
     def test_profile_mode_rejects_invalid_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

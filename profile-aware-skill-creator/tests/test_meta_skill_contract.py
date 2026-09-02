@@ -307,6 +307,15 @@ class ProfileAuthoringStandardTest(unittest.TestCase):
         self.assertIn("preserve", self.text.lower())
         self.assertIn("unrelated", self.text.lower())
 
+    def test_contract_test_requirements_list_four_behaviors(self) -> None:
+        lowered = self.text.lower()
+        # The generated contract test must cover all four runtime behaviors.
+        self.assertIn("capability preflight", lowered)
+        self.assertIn("user consent", lowered)
+        self.assertIn("immutable", lowered)
+        self.assertIn("preservation", lowered)
+        self.assertIn("placeholder", lowered)
+
 
 class SubmitEventRuntimeTest(unittest.TestCase):
     """Behavioral contract of ``references/submit-event-runtime.md``."""
@@ -629,6 +638,19 @@ class MetaSkillEntrypointTest(unittest.TestCase):
         self.assertIn("profile-authoring-standard.md", self.body)
         self.assertIn("submit-event-runtime.md", self.body)
         self.assertIn("validate", self.body.lower())
+
+    def test_profile_branch_requires_four_contract_behaviors(self) -> None:
+        lowered = self.body.lower()
+        # The profile branch must require the contract tests to actually run
+        # and cover the four runtime behaviors; a placeholder is rejected.
+        for token in (
+            "capability preflight",
+            "user consent",
+            "immutable",
+            "full scan",
+            "placeholder",
+        ):
+            self.assertIn(token, lowered)
 
     def test_creation_time_performs_no_profile_mcp_operations(self) -> None:
         # Creating a Skill must not itself call identity/profile operations.

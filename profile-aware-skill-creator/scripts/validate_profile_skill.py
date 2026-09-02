@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,6 +31,31 @@ MODES = ("plain", "profile")
 # The project validator rejects any field outside this set, mirroring the
 # official allow-list so officially-illegal fields (e.g. ``interface``) fail.
 OFFICIAL_FRONTMATTER_FIELDS = {"name", "description", "license", "allowed-tools", "metadata"}
+
+# Generated profile contract tests must cover these four runtime behaviors.
+# The validator requires each behavior to appear (by an unambiguous token) in
+# the test source and requires the tests to actually execute and pass.
+CONTRACT_MIN_TESTS = 4
+CONTRACT_BEHAVIORS = (
+    ("capabilities preflight and fail-closed", (
+        "system.capabilities.read", "capabilities.read", "capabilities read",
+        "fail-closed", "fail closed", "unsupported", "preflight",
+    )),
+    ("user consent before profile mutation", (
+        "system.user.resolve", "user.resolve", "consent", "user-registered",
+        "user_registered", "register", "explicit",
+    )),
+    ("immutable, read-only evidence", (
+        "profile.evidence.recorded", "evidence.recorded", "profile.snapshot.read",
+        "snapshot.read", "immutable", "append-only", "overwrite",
+    )),
+    ("full scan and preservation of existing files", (
+        "full file scan", "full-file-scan", "byte-for-byte", "preserve",
+        "preservation", "existing", "inventory", "scan",
+    )),
+)
+# Default: execute generated contract tests as part of profile validation.
+_EXECUTE_CONTRACT_TESTS = True
 
 SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$")
 RESERVED_DOMAINS = ("algorithm", "interview", "resume-knowledge", "system", "profile")
@@ -207,6 +233,54 @@ def _parse_frontmatter(text: str, errors: list[str], rel: str) -> dict[str, str]
 
 def _is_under(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
+
+
+def _count_unittest_tests(output: str) -> int:
+    """Extract the 'Ran N test(s)' count from unittest verbose output."""
+    match = re.search(r"Ran (\d+) test", output)
+    return int(match.group(1)) if match else 0
+
+
+def _validate_contract_test(root: Path, errors: list[str]) -> None:
+    """Enforce the four contract behaviors and actual execution of the
+    generated profile contract tests.
+
+    A placeholder test file (e.g. a single ``self.assertTrue(True)``) passes
+    neither the behavior-coverage check nor the minimum test count, so it is
+    rejected rather than mistaken for a real forward test.
+    """
+    test_path = root / "tests" / "test_profile_contract.py"
+    if not test_path.is_file():
+        return  # the missing-file error is recorded elsewhere
+    text = _read_text(test_path).lower()
+    for name, tokens in CONTRACT_BEHAVIORS:
+        if not any(token in text for token in tokens):
+            errors.append(
+                f"tests/test_profile_contract.py: contract behavior not covered: {name}"
+            )
+    if not _EXECUTE_CONTRACT_TESTS:
+        return
+    command = [
+        sys.executable, "-B", "-m", "unittest", "discover",
+        "-s", str(root / "tests"), "-p", "test_*.py", "-v",
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        errors.append(
+            f"tests/test_profile_contract.py: could not execute contract tests ({error})"
+        )
+        return
+    if completed.returncode != 0:
+        errors.append("tests/test_profile_contract.py: contract tests failed during execution")
+        return
+    # unittest writes its summary ("Ran N tests") to stderr, not stdout.
+    collected = _count_unittest_tests(completed.stdout + "\n" + completed.stderr)
+    if collected < CONTRACT_MIN_TESTS:
+        errors.append(
+            f"tests/test_profile_contract.py: only {collected} tests collected, "
+            f"expected at least {CONTRACT_MIN_TESTS}"
+        )
 
 
 def _scan_text(text: str, rel: str, errors: list[str]) -> None:
@@ -425,6 +499,8 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
     if "references/profile-contract.md" not in skill_text:
         errors.append("SKILL.md: must link references/profile-contract.md")
 
+    _validate_contract_test(root, errors)
+
     capability_path = root / "schemas" / "profile-capability.json"
     if capability_path.is_file():
         try:
@@ -454,9 +530,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--mode", choices=MODES, required=True,
                         help="validation mode: plain or profile")
+    parser.add_argument("--no-execute-contract-tests", action="store_true",
+                        help="skip executing generated contract tests (markers only)")
     parser.add_argument("skill_dir", type=Path,
                         help="the resolved target Skill directory")
     args = parser.parse_args(argv)
+    global _EXECUTE_CONTRACT_TESTS
+    _EXECUTE_CONTRACT_TESTS = not args.no_execute_contract_tests
     errors = validate_skill(args.skill_dir, args.mode)
     if errors:
         for error in errors:
