@@ -277,6 +277,23 @@ class ValidatorBehaviorTest(unittest.TestCase):
                         f"expected a path error for {bad_path}, got {errors}",
                     )
 
+    def test_pycache_and_pyc_files_are_not_scanned(self) -> None:
+        # Bytecode caches embed absolute source paths; the validator must
+        # ignore them so a generated skill's __pycache__ never yields a false
+        # "hardcoded home path" violation.
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_plain_skill(Path(tmp))
+            cache = skill_dir / "__pycache__"
+            cache.mkdir()
+            (cache / "module.cpython-312.pyc").write_text(
+                "C:\\Users\\alice\\notes", encoding="utf-8", errors="ignore"
+            )
+            (skill_dir / "stray.pyc").write_text(
+                "C:\\Users\\alice\\notes", encoding="utf-8", errors="ignore"
+            )
+            errors = self.validator.validate_skill(skill_dir, "plain")
+            self.assertEqual(errors, [])
+
     def test_json_file_id_fields_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = _write_profile_skill(Path(tmp))

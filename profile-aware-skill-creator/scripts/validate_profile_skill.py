@@ -216,6 +216,10 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
     # the explicitly supplied directory instead of traversing them.
     visited: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        # Never descend into or scan Python bytecode caches; their embedded
+        # source paths would otherwise trigger false home-path violations.
+        if "__pycache__" in dirnames:
+            dirnames.remove("__pycache__")
         current = Path(dirpath)
         for name in sorted(dirnames):
             candidate = current / name
@@ -225,6 +229,8 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
                 )
                 dirnames.remove(name)
         for name in sorted(filenames):
+            if name.endswith(".pyc"):
+                continue
             candidate = current / name
             resolved = candidate.resolve()
             if not _is_under(resolved, root):
