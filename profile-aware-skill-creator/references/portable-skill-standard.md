@@ -76,7 +76,11 @@ Validation failures are fixed in the generated files, never silenced.
   standard with native file tools.
 - **`agents/openai.yaml`** is an optional OpenAI/Codex UI adapter. It is never
   part of the core contract, and the Skill's core logic must not depend on it.
-  Platforms that ignore it must lose no functionality.
+  Platforms that ignore it must lose no functionality. When this adapter is
+  created, any requested display name goes in its `interface.display_name`
+  field only; `interface` or `display_name` must never be written into
+  `SKILL.md` frontmatter, and when no adapter file is created the display name
+  is omitted entirely.
 
 Platform-specific tool-call syntax may differ, but any JSON envelope passed to
 `submit_event` must be identical across Codex, ChatGPT, Claude, and

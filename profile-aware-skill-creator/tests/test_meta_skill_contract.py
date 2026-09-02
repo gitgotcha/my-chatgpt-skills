@@ -549,9 +549,36 @@ class MetaSkillEntrypointTest(unittest.TestCase):
 
     def test_prose_skill_name_becomes_display_name_not_a_folder_rename(self) -> None:
         """The folder name stays the identifier when the prose names differ."""
-        lowered = self.body.lower()
+        # Collapse whitespace: the guidance may wrap "never rename" across lines.
+        flattened = " ".join(self.body.lower().split())
         self.assertIn("display_name", self.body)
-        self.assertIn("never rename", lowered)
+        self.assertIn("never rename", flattened)
+
+    def test_display_name_is_adapter_only_not_skill_frontmatter(self) -> None:
+        """display_name must never be emitted in SKILL.md frontmatter."""
+        lowered = " ".join(self.body.lower().split())
+        self.assertIn("interface.display_name", self.body)
+        self.assertIn("agents/openai.yaml", lowered)
+        self.assertIn("frontmatter", lowered)
+        self.assertIn("only", lowered)
+        self.assertRegex(lowered, r"omit|omitted|without")
+
+    def test_interface_key_is_forbidden_in_skill_frontmatter(self) -> None:
+        """Regression from the final-review finding (Case 3).
+
+        A fresh agent emitted an ``interface:`` block inside SKILL.md
+        frontmatter, which the official validator rejects (exit 1). The
+        guidance must state, in so many words, that no other key -- including
+        ``interface`` or ``display_name`` -- may appear in SKILL.md
+        frontmatter; otherwise a literal reading of "interface.display_name"
+        leads agents to write it there.
+        """
+        lowered = " ".join(self.body.lower().split())
+        self.assertIn("interface", lowered)
+        self.assertIn("frontmatter", lowered)
+        # A strong, unambiguous prohibition must be present.
+        self.assertIn("no other key", lowered)
+        self.assertRegex(lowered, r"no other key.{0,120}interface")
 
     def test_named_directory_is_the_skill_root_not_a_nested_subdirectory(self) -> None:
         """Regression from the GREEN forward test, case 2.
