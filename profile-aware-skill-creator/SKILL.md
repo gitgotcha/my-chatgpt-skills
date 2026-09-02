@@ -30,6 +30,13 @@ Build the ordinary Skill first. On Codex, invoke `$skill-creator` when it is
 available; otherwise follow [references/portable-skill-standard.md](references/portable-skill-standard.md)
 with native file tools. Other platforms use the portable standard directly.
 
+Whichever initializer produced it, the final `SKILL.md` frontmatter must
+satisfy this project's contract: `name` equals the Skill folder name, and
+`description` begins with `Use when`. When the user's wording names the Skill
+differently from the folder, keep the folder name as `name` and carry the
+requested name in `interface.display_name`; never rename the folder to match
+the prose.
+
 A plain Skill must not contain `references/profile-contract.md`,
 `schemas/profile-capability.json`, or `tests/test_profile_contract.py`, and it
 must not mention profile events. Do not create the `agents/openai.yaml`

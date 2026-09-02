@@ -1,0 +1,9 @@
+Fail-closed hold for WorkBuddy automation 867200cf-a25d-41d0-86aa-5f58458fd574.
+
+Created after the immediate 2026-09-02 fresh Case 2 run failed its required
+profile-aware validator. The scheduled job's Rule 0 requires an empty
+`git status --short`, so this untracked file prevents duplicate Case 2/3/4
+dispatch on 2026-09-03 while preserving HEAD 2fff057 and all product files.
+
+Remove this file only after the WorkBuddy automation is confirmed paused or
+deleted, or immediately before an explicitly authorized clean re-run.

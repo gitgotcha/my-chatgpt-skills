@@ -510,6 +510,28 @@ class MetaSkillEntrypointTest(unittest.TestCase):
         self.assertIn("preserv", lowered)
         self.assertIn("inspect", lowered)
 
+    def test_frontmatter_contract_is_not_overridable_by_an_initializer(self) -> None:
+        """Regression from the GREEN forward test, case 2 (fresh agent).
+
+        The plain branch tells the agent to invoke the platform's own
+        ``$skill-creator`` when it is available. A fresh agent did exactly
+        that, and the external initializer produced ``name: release-notes``
+        inside a folder named ``plain-release-notes`` plus a description that
+        did not begin with ``Use when`` -- both invalid under this project's
+        validator. The contract must be stated as applying to whichever
+        initializer ran, not only to the portable standard path.
+        """
+        lowered = self.body.lower()
+        self.assertIn("initializer", lowered)
+        self.assertIn("folder name", lowered)
+        self.assertIn("use when", lowered)
+
+    def test_prose_skill_name_becomes_display_name_not_a_folder_rename(self) -> None:
+        """The folder name stays the identifier when the prose names differ."""
+        lowered = self.body.lower()
+        self.assertIn("display_name", self.body)
+        self.assertIn("never rename", lowered)
+
     def test_named_directory_is_the_skill_root_not_a_nested_subdirectory(self) -> None:
         """Regression from the GREEN forward test, case 2.
 
