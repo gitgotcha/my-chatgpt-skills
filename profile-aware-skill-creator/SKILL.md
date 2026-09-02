@@ -7,10 +7,12 @@ description: Use when a user explicitly asks to create or update a reusable Skil
 
 Create or update a Skill at the path the user explicitly named. The user's
 target path is authoritative: never redirect output to a default skills
-directory, the current repository, or a temporary folder. If no path was
-given, ask for one and stop. When the target directory already exists, inspect
-its contents first and preserve every unrelated file, field, and user
-modification; update in place with the smallest additive change.
+directory, the current repository, or a temporary folder. **The named
+directory is the Skill root**: write `SKILL.md` and every other generated file
+directly into it, never into a nested subdirectory named after the Skill. If
+no path was given, ask for one and stop. When the target directory already
+exists, inspect its contents first and preserve every unrelated file, field,
+and user modification; update in place with the smallest additive change.
 
 ## Ask the single routing question
 

@@ -510,6 +510,35 @@ class MetaSkillEntrypointTest(unittest.TestCase):
         self.assertIn("preserv", lowered)
         self.assertIn("inspect", lowered)
 
+    def test_named_directory_is_the_skill_root_not_a_nested_subdirectory(self) -> None:
+        """Regression from the GREEN forward test, case 2.
+
+        Saying only "never redirect to another location" was not enough: the
+        generator still created ``<target>/<skill-name>/SKILL.md`` instead of
+        ``<target>/SKILL.md``. The guidance must name the Skill root and
+        forbid a nested subdirectory explicitly.
+        """
+        for label, text in (
+            ("SKILL.md", self.body),
+            ("portable-skill-standard.md", _read(PORTABLE_SKILL_STANDARD)),
+        ):
+            lowered = text.lower()
+            self.assertIn(
+                "skill root",
+                lowered,
+                f"{label} must state which directory is the Skill root",
+            )
+            self.assertIn(
+                "nested",
+                lowered,
+                f"{label} must forbid nested output directories",
+            )
+            self.assertIn(
+                "subdirector",
+                lowered,
+                f"{label} must forbid generating into a subdirectory",
+            )
+
     def test_profile_question_gates_two_exclusive_branches(self) -> None:
         lowered = self.body.lower()
         self.assertIn("profile", lowered)

@@ -40,6 +40,10 @@ directory, the current repository, or a temporary folder. When the parent
 directory does not exist or the request's meaning is unclear, stop and ask for
 an explicit path rather than guessing.
 
+The named directory is the Skill root. Write `SKILL.md` directly into it; do
+not create a nested subdirectory named after the Skill, because that silently
+moves the authoritative path one level down.
+
 ## Update in place
 
 When the target directory already exists, update it in place:
