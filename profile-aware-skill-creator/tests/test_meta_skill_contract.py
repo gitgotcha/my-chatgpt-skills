@@ -510,6 +510,20 @@ class MetaSkillEntrypointTest(unittest.TestCase):
         self.assertIn("preserv", lowered)
         self.assertIn("inspect", lowered)
 
+    def test_routing_question_is_the_only_question_no_design_approval(self) -> None:
+        """Regression from the GREEN forward test, case 2 attempt 2.
+
+        A fresh agent stopped to ask "confirm this design?" instead of
+        creating the Skill. Under a non-interactive dispatcher the session
+        then ended with exit code 0 and zero artifacts, which reads like
+        success. The entrypoint must forbid ending on a design-approval
+        question once the path and the routing answer are known.
+        """
+        # Collapse whitespace: the guidance may wrap across source lines.
+        flattened = " ".join(self.body.lower().split())
+        self.assertIn("only question", flattened)
+        self.assertIn("approval", flattened)
+
     def test_frontmatter_contract_is_not_overridable_by_an_initializer(self) -> None:
         """Regression from the GREEN forward test, case 2 (fresh agent).
 

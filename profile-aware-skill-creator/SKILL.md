@@ -19,7 +19,10 @@ and user modification; update in place with the smallest additive change.
 If the current request does not already state the answer, ask exactly one
 question before creating anything: does this Skill need to save and read a
 person profile across sessions? Honor an answer that is already explicit —
-never re-ask, and never decide for the user.
+never re-ask, and never decide for the user. That routing question is the only
+question you may ask. Do not stop to request design approval or any other
+go-ahead; create the Skill and validate it, and never end a turn on a question
+once the path and the routing answer are known.
 
 The answer gates two mutually exclusive branches. Creating or updating a Skill
 performs no identity or profile operations of its own.
