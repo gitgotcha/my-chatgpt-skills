@@ -7,9 +7,12 @@ Usage:
     python scripts/validate_profile_skill.py --mode profile <target-skill-dir>
 
 Prints one error per line and exits 1 when invalid; prints an OK line and
-exits 0 when valid. The validator uses only the Python standard library and
-enforces project-specific invariants; it does not claim to replace a full
-Draft 2020-12 JSON Schema validator.
+exits 0 when valid. The validator uses only the Python standard library: it
+enforces project-specific invariants (target-path isolation, no home paths, no
+Drive access, frontmatter allow-list) and, for profile Skills, executes the
+shipped ``schemas/profile-capability.schema.json`` (Draft 2020-12 subset) so
+generated capability documents are checked against the same contract the
+schema declares.
 """
 
 from __future__ import annotations
@@ -22,6 +25,11 @@ import sys
 from pathlib import Path
 
 MODES = ("plain", "profile")
+
+# Frontmatter fields permitted by the official Codex/OpenAI skill validator.
+# The project validator rejects any field outside this set, mirroring the
+# official allow-list so officially-illegal fields (e.g. ``interface``) fail.
+OFFICIAL_FRONTMATTER_FIELDS = {"name", "description", "license", "allowed-tools", "metadata"}
 
 SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$")
 RESERVED_DOMAINS = ("algorithm", "interview", "resume-knowledge", "system", "profile")
@@ -79,6 +87,96 @@ DRIVE_PATTERNS = [
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
 
+# The capability JSON Schema shipped with this meta Skill. The validator
+# executes it directly, so generated capability documents are checked against
+# the same contract the schema declares (additionalProperties, const, enum,
+# pattern, minLength, maxLength, minItems, uniqueItems, required, items,
+# properties, not) rather than only an ad-hoc re-implementation.
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "profile-capability.schema.json"
+
+
+def _schema_type_matches(value: object, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    return True
+
+
+def _schema_canonical(item: object) -> str:
+    try:
+        return json.dumps(item, sort_keys=True, default=str)
+    except TypeError:
+        return repr(item)
+
+
+def _validate_against_schema(instance: object, schema: object, path: str, errors: list[str]) -> None:
+    """Minimal Draft 2020-12 subset validator (standard library only)."""
+    if not isinstance(schema, dict):
+        return
+    if "type" in schema and not _schema_type_matches(instance, schema["type"]):
+        errors.append(f"{path}: expected type {schema['type']}")
+        return
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"{path}: must equal the constant {schema['const']!r}")
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{path}: must be one of {schema['enum']!r}")
+    if "pattern" in schema and isinstance(instance, str):
+        if re.search(schema["pattern"], instance) is None:
+            errors.append(f"{path}: must match pattern {schema['pattern']!r}")
+    if "minLength" in schema and isinstance(instance, str) and len(instance) < schema["minLength"]:
+        errors.append(f"{path}: shorter than minLength {schema['minLength']}")
+    if "maxLength" in schema and isinstance(instance, str) and len(instance) > schema["maxLength"]:
+        errors.append(f"{path}: longer than maxLength {schema['maxLength']}")
+    if "minItems" in schema and isinstance(instance, list) and len(instance) < schema["minItems"]:
+        errors.append(f"{path}: fewer than minItems {schema['minItems']}")
+    if "uniqueItems" in schema and schema["uniqueItems"] and isinstance(instance, list):
+        seen = [_schema_canonical(item) for item in instance]
+        if len(seen) != len(set(seen)):
+            errors.append(f"{path}: items must be unique")
+    if "not" in schema:
+        sub_errors: list[str] = []
+        _validate_against_schema(instance, schema["not"], path, sub_errors)
+        if not sub_errors:
+            errors.append(f"{path}: must not satisfy the negated constraint")
+    if isinstance(instance, dict):
+        for req in schema.get("required", []):
+            if req not in instance:
+                errors.append(f"{path}: missing required field {req!r}")
+        props = schema.get("properties", {})
+        for key, val in instance.items():
+            if key in props:
+                _validate_against_schema(val, props[key], f"{path}.{key}", errors)
+            elif schema.get("additionalProperties") is False:
+                errors.append(f"{path}: unknown field {key!r}")
+    if isinstance(instance, list) and "items" in schema:
+        for index, item in enumerate(instance):
+            _validate_against_schema(item, schema["items"], f"{path}[{index}]", errors)
+
+
+_SCHEMA_CACHE: dict[str, object] = {}
+
+
+def _load_capability_schema() -> object | None:
+    if "document" in _SCHEMA_CACHE:
+        return _SCHEMA_CACHE["document"]
+    if not SCHEMA_PATH.is_file():
+        return None
+    try:
+        document = json.loads(_read_text(SCHEMA_PATH))
+    except (OSError, json.JSONDecodeError):
+        return None
+    _SCHEMA_CACHE["document"] = document
+    return document
+
 
 def _read_text(path: Path) -> str:
     try:
@@ -133,10 +231,18 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
     if not isinstance(document, dict):
         errors.append(f"{rel}: capability document must be a JSON object")
         return
-    expected_top = [
+    
+    # Validate top-level fields (only allowed ones)
+    allowed_top_fields = {
         "schemaVersion", "domain", "sourceSkill", "dimensions",
         "evidencePolicy", "runtime", "portability",
-    ]
+    }
+    for key in document:
+        if key not in allowed_top_fields:
+            errors.append(f"{rel}: unknown top-level field {key!r}; allowed fields: {sorted(allowed_top_fields)}")
+    
+    expected_top = ["schemaVersion", "domain", "sourceSkill", "dimensions",
+                    "evidencePolicy", "runtime", "portability"]
     for key in expected_top:
         if key not in document:
             errors.append(f"{rel}: missing required field {key!r}")
@@ -158,15 +264,30 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
             if not isinstance(dimension, dict):
                 errors.append(f"{rel}: each dimension must be an object")
                 continue
+            # Validate dimension fields
+            allowed_dim_fields = {"dimensionKey", "subjectKeyDescription", "description"}
+            for key in dimension:
+                if key not in allowed_dim_fields:
+                    errors.append(f"{rel}: dimension has unknown field {key!r}; allowed fields: {sorted(allowed_dim_fields)}")
             if not isinstance(dimension.get("dimensionKey"), str) or not SAFE_ID.match(dimension.get("dimensionKey", "")):
                 errors.append(f"{rel}: dimensionKey must match the safe-identifier pattern")
             for key in ("subjectKeyDescription", "description"):
                 if not isinstance(dimension.get(key), str) or not dimension.get(key):
                     errors.append(f"{rel}: dimension field {key!r} must be a non-empty string")
+    dimension_keys = [d.get("dimensionKey") for d in dimensions if isinstance(d, dict)]
+    if len(dimension_keys) != len(set(dimension_keys)):
+        errors.append(f"{rel}: dimensionKey values must be unique")
     evidence = document.get("evidencePolicy")
     if not isinstance(evidence, dict):
         errors.append(f"{rel}: evidencePolicy must be an object")
     else:
+        allowed_evidence_fields = {
+            "recordWhen", "doNotRecordWhen", "allowedOutcomes",
+            "sourceRefPolicy", "minimumEvidenceTextLength",
+        }
+        for key in evidence:
+            if key not in allowed_evidence_fields:
+                errors.append(f"{rel}: evidencePolicy has unknown field {key!r}; allowed fields: {sorted(allowed_evidence_fields)}")
         for key in EVIDENCE_POLICY_FIELDS:
             if key not in evidence:
                 errors.append(f"{rel}: evidencePolicy is missing {key!r}")
@@ -183,6 +304,10 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
     if not isinstance(runtime, dict):
         errors.append(f"{rel}: runtime must be an object")
     else:
+        allowed_runtime_fields = set(RUNTIME_OPERATIONS.keys())
+        for key in runtime:
+            if key not in allowed_runtime_fields:
+                errors.append(f"{rel}: runtime has unknown field {key!r}; allowed fields: {sorted(allowed_runtime_fields)}")
         for key, constant in RUNTIME_OPERATIONS.items():
             if runtime.get(key) != constant:
                 errors.append(
@@ -192,6 +317,10 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
     if not isinstance(portability, dict):
         errors.append(f"{rel}: portability must be an object")
     else:
+        allowed_portability_fields = {"platforms", "coreContractDependsOnOpenaiYaml"}
+        for key in portability:
+            if key not in allowed_portability_fields:
+                errors.append(f"{rel}: portability has unknown field {key!r}; allowed fields: {sorted(allowed_portability_fields)}")
         if portability.get("platforms") != PLATFORMS:
             errors.append(f"{rel}: portability.platforms must be the constant platform list")
         if portability.get("coreContractDependsOnOpenaiYaml") is not False:
@@ -273,6 +402,15 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
     description = frontmatter.get("description", "")
     if not description.startswith("Use when"):
         errors.append("SKILL.md: description must begin with \"Use when\"")
+    
+    # Validate frontmatter against the official skill allow-list. The official
+    # validator rejects any unknown field, so the project validator must too.
+    for field in frontmatter:
+        if field not in OFFICIAL_FRONTMATTER_FIELDS:
+            errors.append(
+                f"SKILL.md: unknown frontmatter field {field!r}; "
+                f"only {sorted(OFFICIAL_FRONTMATTER_FIELDS)} are allowed"
+            )
 
     if mode == "plain":
         for rel in PROFILE_ONLY_PATHS:
@@ -298,6 +436,14 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
             _validate_capability(
                 document, name or root.name, "schemas/profile-capability.json", errors
             )
+            # Full execution of the shipped capability JSON Schema: this is the
+            # authoritative contract check (const, enum, pattern, minLength,
+            # minItems, uniqueItems, additionalProperties, required, items).
+            schema_document = _load_capability_schema()
+            if schema_document is not None:
+                _validate_against_schema(
+                    document, schema_document, "schemas/profile-capability.json", errors
+                )
 
     return sorted(set(errors))
 

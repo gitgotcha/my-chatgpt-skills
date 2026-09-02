@@ -252,6 +252,32 @@ class ValidatorBehaviorTest(unittest.TestCase):
             errors = self.validator.validate_skill(skill_dir, "profile")
             self.assertTrue(any("runtime" in e for e in errors))
 
+    def test_profile_mode_rejects_unknown_top_level_capability_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_profile_skill(Path(tmp))
+            document = _capability_document()
+            document["unknownTopField"] = "should not be here"
+            (skill_dir / "schemas" / "profile-capability.json").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+            errors = self.validator.validate_skill(skill_dir, "profile")
+            self.assertTrue(
+                any("unknown" in e for e in errors) or any("field" in e and "should not" not in e for e in errors)
+            )
+
+    def test_profile_mode_rejects_unknown_runtime_capability_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_profile_skill(Path(tmp))
+            document = _capability_document()
+            document["runtime"]["unknownRuntimeField"] = "invalid"
+            (skill_dir / "schemas" / "profile-capability.json").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+            errors = self.validator.validate_skill(skill_dir, "profile")
+            self.assertTrue(
+                any("unknown" in e for e in errors) or any("runtime" in e and "field" in e for e in errors)
+            )
+
     def test_profile_mode_rejects_direct_drive_access_constant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = _write_profile_skill(Path(tmp))
@@ -293,6 +319,47 @@ class ValidatorBehaviorTest(unittest.TestCase):
             )
             errors = self.validator.validate_skill(skill_dir, "plain")
             self.assertEqual(errors, [])
+
+    def test_plain_mode_rejects_unknown_frontmatter_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_plain_skill(Path(tmp))
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: release-notes\ndescription: Use when drafting release notes.\ninterface:\n  display_name: Test\n---\n",
+                encoding="utf-8",
+            )
+            errors = self.validator.validate_skill(skill_dir, "plain")
+            self.assertTrue(any("unknown frontmatter field" in e for e in errors))
+
+    def test_frontmatter_accepts_official_fields(self) -> None:
+        # The validator must align with the official skill allow-list, so
+        # license / allowed-tools / metadata are accepted; only fields outside
+        # that set (e.g. interface) are rejected.
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_plain_skill(Path(tmp))
+            (skill_dir / "SKILL.md").write_text(
+                "---\n"
+                "name: release-notes\n"
+                "description: Use when drafting release notes.\n"
+                "license: MIT\n"
+                'allowed-tools: ["read"]\n'
+                'metadata: {"a": 1}\n'
+                "---\n",
+                encoding="utf-8",
+            )
+            errors = self.validator.validate_skill(skill_dir, "plain")
+            self.assertEqual(errors, [])
+
+    def test_profile_mode_rejects_duplicate_dimensions(self) -> None:
+        # uniqueItems on dimensions is enforced by the schema-driven check.
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _write_profile_skill(Path(tmp))
+            document = _capability_document()
+            document["dimensions"] = [document["dimensions"][0], dict(document["dimensions"][0])]
+            (skill_dir / "schemas" / "profile-capability.json").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+            errors = self.validator.validate_skill(skill_dir, "profile")
+            self.assertTrue(any("unique" in e.lower() for e in errors))
 
     def test_json_file_id_fields_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
