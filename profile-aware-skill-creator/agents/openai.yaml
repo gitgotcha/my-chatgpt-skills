@@ -1,0 +1,6 @@
+interface:
+  display_name: "Profile-aware Skill Creator"
+  short_description: "创建可选人物画像能力的可移植 Skill"
+  default_prompt: "Use $profile-aware-skill-creator to create a Skill at my specified path and ask whether it needs a persistent user profile."
+policy:
+  allow_implicit_invocation: false

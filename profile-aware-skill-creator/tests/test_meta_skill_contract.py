@@ -450,5 +450,107 @@ class PortableSkillStandardTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.text)
 
 
+SKILL_MD = SKILL_ROOT / "SKILL.md"
+OPENAI_YAML = SKILL_ROOT / "agents" / "openai.yaml"
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Parse the small YAML frontmatter block without PyYAML."""
+    if not text.startswith("---\n"):
+        raise ValueError("missing frontmatter")
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        raise ValueError("unterminated frontmatter")
+    fields: dict[str, str] = {}
+    for line in text[4:end].splitlines():
+        if not line.strip():
+            continue
+        key, _, value = line.partition(":")
+        fields[key.strip()] = value.strip()
+    return fields, text[end + 5:]
+
+
+class MetaSkillEntrypointTest(unittest.TestCase):
+    """Observable invariants of the meta Skill entrypoint."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = _read(SKILL_MD)
+        cls.frontmatter, cls.body = _parse_frontmatter(cls.text)
+        cls.yaml_text = _read(OPENAI_YAML)
+
+    def test_frontmatter_name_equals_folder_name(self) -> None:
+        self.assertEqual(self.frontmatter.get("name"), "profile-aware-skill-creator")
+        self.assertEqual(SKILL_ROOT.name, "profile-aware-skill-creator")
+
+    def test_description_begins_with_use_when(self) -> None:
+        self.assertTrue(
+            self.frontmatter.get("description", "").startswith("Use when"),
+            "description must begin with 'Use when'",
+        )
+
+    def test_explicit_only_policy(self) -> None:
+        self.assertIn("allow_implicit_invocation: false", self.yaml_text)
+
+    def test_default_prompt_references_the_skill(self) -> None:
+        self.assertIn("$profile-aware-skill-creator", self.yaml_text)
+
+    def test_body_is_concise(self) -> None:
+        words = len(self.body.split())
+        self.assertLessEqual(words, 500, f"SKILL.md body too long: {words} words")
+
+    def test_body_has_no_json_examples(self) -> None:
+        self.assertNotIn('"schemaVersion"', self.body)
+        self.assertNotIn("eventType", self.body)
+
+    def test_target_path_required_and_preserved(self) -> None:
+        lowered = self.body.lower()
+        self.assertIn("target", lowered)
+        self.assertIn("path", lowered)
+        self.assertIn("preserv", lowered)
+        self.assertIn("inspect", lowered)
+
+    def test_profile_question_gates_two_exclusive_branches(self) -> None:
+        lowered = self.body.lower()
+        self.assertIn("profile", lowered)
+        self.assertIn("question", lowered)
+        self.assertIn("plain", lowered)
+        # Two mutually exclusive branches, never both triggered by one answer.
+        self.assertIn("plain", lowered)
+        self.assertIn("profile", lowered)
+
+    def test_plain_mode_routes_to_skill_creator_and_forbids_profile_artifacts(self) -> None:
+        self.assertIn("$skill-creator", self.body)
+        for path in PLAIN_FORBIDDEN_PATHS:
+            self.assertIn(path, self.body)
+
+    def test_profile_mode_reads_references_and_produces_three_files(self) -> None:
+        for path in PROFILE_REQUIRED_PATHS:
+            self.assertIn(path, self.body)
+        self.assertIn("profile-authoring-standard.md", self.body)
+        self.assertIn("submit-event-runtime.md", self.body)
+        self.assertIn("validate", self.body.lower())
+
+    def test_creation_time_performs_no_profile_mcp_operations(self) -> None:
+        # Creating a Skill must not itself call identity/profile operations.
+        for operation in [
+            "system.user.resolve",
+            "system.user-registered",
+            "profile.snapshot.read",
+            "profile.evidence.recorded",
+        ]:
+            self.assertNotIn(operation, self.body)
+
+    def test_no_codex_adapter_is_normative_for_other_platforms(self) -> None:
+        lowered = self.body.lower()
+        self.assertIn("portable-skill-standard.md", self.body)
+        self.assertNotIn("openai.yaml", lowered.replace("agents/openai.yaml", ""))
+
+    def test_yaml_display_metadata(self) -> None:
+        self.assertIn("display_name", self.yaml_text)
+        self.assertIn("short_description", self.yaml_text)
+        self.assertIn("default_prompt", self.yaml_text)
+
+
 if __name__ == "__main__":
     unittest.main()
