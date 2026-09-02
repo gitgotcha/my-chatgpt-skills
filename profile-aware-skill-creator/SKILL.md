@@ -33,7 +33,11 @@ A plain Skill must not contain `references/profile-contract.md`,
 must not mention profile events. Do not create the `agents/openai.yaml`
 adapter unless the target platform uses it.
 
-Validate the result in plain mode and stop.
+Validate the result in plain mode and stop:
+
+```text
+python scripts/validate_profile_skill.py --mode plain <resolved-target-skill-dir>
+```
 
 ## Profile branch (answer: yes)
 
@@ -51,4 +55,11 @@ Validate the result in plain mode and stop.
    the target platform uses it, and never let the core contract depend on it.
 
 Validate the result in profile mode, run the generated contract tests as a
-forward test, and stop.
+forward test, and stop:
+
+```text
+python scripts/validate_profile_skill.py --mode profile <resolved-target-skill-dir>
+```
+
+The directory argument is always the user's resolved target path, never a
+default location.
