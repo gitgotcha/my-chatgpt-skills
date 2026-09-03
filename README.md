@@ -27,7 +27,7 @@
 | [backend-project-learning](./backend-project-learning/) | 从真实源码学习后端项目与业务链路 | ❌ |
 | [conducting-java-backend-mock-interviews](./conducting-java-backend-mock-interviews/) | Java 后端模拟面试 | ✅ |
 | [reviewing-java-backend-interviews](./reviewing-java-backend-interviews/) | 模拟/真实面试复盘与画像更新 | ✅ |
-| [child-photoShop-skill](./child-photoShop-skill/) | 儿童摄影选片、调色、精修与风格迁移 | ❌ |
+| [child-photography-editing](./child-photography-editing/) | 儿童摄影开发者样本学风格、背景/主题/元素编辑、批量处理与人物不失真 | ❌ |
 | [profile-aware-skill-creator](./profile-aware-skill-creator/) | 创建普通 Skill 或带长期用户画像的 Skill | 按生成目标决定 |
 
 ---
@@ -331,15 +331,15 @@ outputs/interview/<userId>/
 
 ---
 
-# 5. Child Photoshop Skill
+# 5. Child Photography Editing Skill
 
 目录：
 
 ```text
-child-photoShop-skill/
+child-photography-editing/
 ```
 
-这是针对儿童摄影馆工作流设计的后期 Skill。
+这是针对儿童摄影馆工作流设计的样本优先创作与后期 Skill：先由开发者样本学习风格，再进行背景、主题、元素编辑与批量处理，同时保持人物不失真。
 
 核心原则：
 
@@ -351,24 +351,19 @@ child-photoShop-skill/
 
 支持：
 
-- 从模板图学习风格
-- Style Profile
-- 批量统一调色
-- 技术质量分析
-- 连拍去重
-- 选片
-- Contact Sheet
-- 背景处理规范
-- 儿童身份保护
-- 表情保护
-- 童真保护
-- 风格库原型
+- 从开发者样本学习风格
+- 编译带逐维证据来源与置信度的 Style Profile
+- 隔离只描述执行质量的 Approved Treatment Hints，拒绝旧颜色、旧主题和旧道具泄漏
+- 六种受保护编辑模式：`background-only`、`skin-only`、`crop-only`、`theme-edit`、`poster-edit`、`batch-style-transfer`
+- 为每张图建立人物保护 Edit Plan，并在生成提示词前重新校验
+- 以规范化哈希冻结 Batch Style Lock，并保持首个合格锚点不变
+- 执行单图人物 QA、批次一致性 QA，以及失败结果的 `rejected/` 安全回退
 
-其中身份保持属于最高优先级约束之一。
+在所有视觉编辑决策中，人物真实性是绝对最高优先级；任何风格、主题、文字或批次一致性目标与之冲突时，都必须缩小范围或放弃效果。
 
 详细说明：
 
-[child-photoShop-skill/README.md](./child-photoShop-skill/README.md)
+[child-photography-editing/SKILL.md](./child-photography-editing/SKILL.md)
 
 ---
 
@@ -725,7 +720,7 @@ my-chatgpt-skills/
 │
 ├── algorithm-learning/
 ├── backend-project-learning/
-├── child-photoShop-skill/
+├── child-photography-editing/
 ├── conducting-java-backend-mock-interviews/
 ├── java-knowledge-based-on-resume-learn-skill/
 ├── profile-aware-skill-creator/
@@ -934,7 +929,7 @@ Profile 应来自证据，而不是模型印象。
 
 ```text
 algorithm-learning/tests/
-child-photoShop-skill/tests/
+child-photography-editing/tests/
 services/reliable-drive-sync-worker/test/
 tools/reliable-drive-sync-mcp/test/
 ```
@@ -1076,7 +1071,7 @@ Skill Creator
 
 ### 儿童摄影修图
 
-→ [Child Photoshop Skill](./child-photoShop-skill/)
+→ [Child Photography Editing Skill](./child-photography-editing/)
 
 ### 创建新 Skill
 

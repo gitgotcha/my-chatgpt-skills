@@ -21,7 +21,6 @@ AGENTS_MD = REPO_ROOT / "AGENTS.md"
 PROTECTED_PATHS = [
     "algorithm-learning",
     "backend-project-learning",
-    "child-photoShop-skill",
     "conducting-java-backend-mock-interviews",
     "java-knowledge-based-on-resume-learn-skill",
     "reviewing-java-backend-interviews",
@@ -161,6 +160,7 @@ class ProtectedPathsTest(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
