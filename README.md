@@ -352,23 +352,18 @@ child-photography-editing/
 支持：
 
 - 从开发者样本学习风格
-- Style Profile
-- 批量统一调色
-- 技术质量分析
-- 连拍去重
-- 选片
-- Contact Sheet
-- 背景处理规范
-- 儿童身份保护
-- 表情保护
-- 童真保护
-- 风格库原型
+- 编译带逐维证据来源与置信度的 Style Profile
+- 隔离只描述执行质量的 Approved Treatment Hints，拒绝旧颜色、旧主题和旧道具泄漏
+- 六种受保护编辑模式：`background-only`、`skin-only`、`crop-only`、`theme-edit`、`poster-edit`、`batch-style-transfer`
+- 为每张图建立人物保护 Edit Plan，并在生成提示词前重新校验
+- 以规范化哈希冻结 Batch Style Lock，并保持首个合格锚点不变
+- 执行单图人物 QA、批次一致性 QA，以及失败结果的 `rejected/` 安全回退
 
-其中身份保持属于最高优先级约束之一。
+在所有视觉编辑决策中，人物真实性是绝对最高优先级；任何风格、主题、文字或批次一致性目标与之冲突时，都必须缩小范围或放弃效果。
 
 详细说明：
 
-[child-photography-editing/README.md](./child-photography-editing/README.md)
+[child-photography-editing/SKILL.md](./child-photography-editing/SKILL.md)
 
 ---
 

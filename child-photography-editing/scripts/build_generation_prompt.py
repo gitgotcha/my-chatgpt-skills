@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
+
+from style_profile import validate_approved_hints
+from validate_edit_plan import validate_edit_plan
 
 NEGATIVE_CONSTRAINTS = (
     "no face replacement; no changes to facial features, face shape, head shape, eye shape, "
@@ -23,12 +27,17 @@ def _serialize_authority_then_methods(profile: dict, plan: dict) -> str:
 
 
 def build_prompt(profile: dict, plan: dict) -> dict:
-    mode = plan.get("mode")
+    if not isinstance(profile, dict):
+        raise ValueError("style profile must be an object")
+    validated_profile = copy.deepcopy(profile)
+    validated_profile["approvedTreatmentHints"] = validate_approved_hints(profile.get("approvedTreatmentHints", {}))
+    validated_plan = validate_edit_plan(plan)
+    mode = validated_plan["mode"]
     return {
-        "instruction": _serialize_authority_then_methods(profile, plan),
+        "instruction": _serialize_authority_then_methods(validated_profile, validated_plan),
         "negativeConstraints": NEGATIVE_CONSTRAINTS,
         "maskPolicy": mode if mode in {"background-only", "skin-only", "crop-only"} else "person-protected-periphery",
-        "outputSpec": plan.get("outputSpec", {"ratio": "3:5", "width": 1200, "height": 2000}),
+        "outputSpec": validated_plan["outputSpec"],
     }
 
 
@@ -37,9 +46,19 @@ def main() -> int:
     parser.add_argument("profile")
     parser.add_argument("plan")
     args = parser.parse_args()
-    profile = json.load(open(args.profile, encoding="utf-8"))
-    plan = json.load(open(args.plan, encoding="utf-8"))
-    print(json.dumps(build_prompt(profile, plan), ensure_ascii=False, indent=2))
+    try:
+        with open(args.profile, encoding="utf-8") as profile_file:
+            profile = json.load(profile_file)
+        with open(args.plan, encoding="utf-8") as plan_file:
+            plan = json.load(plan_file)
+        prompt = build_prompt(profile, plan)
+    except json.JSONDecodeError as exc:
+        parser.error(f"invalid JSON: {exc.msg}")
+    except OSError as exc:
+        parser.error(f"cannot read input file: {exc}")
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(json.dumps(prompt, ensure_ascii=False, indent=2))
     return 0
 
 

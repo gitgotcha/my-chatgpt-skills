@@ -1,18 +1,23 @@
 ---
 name: child-photography-editing
-description: This skill should be used when children's photographs need developer-reference style learning, background or theme edits, poster elements, local retouching, or consistent batch processing; triggers include 儿童摄影、参考样本、换背景、批量修图、人物不失真、绿色背景、儿童海报.
+description: Use when children's photographs need developer-reference style learning, background or theme edits, poster elements, local retouching, or consistent batch processing; triggers include 儿童摄影、参考样本、换背景、批量修图、人物不失真、绿色背景、儿童海报.
 ---
 
 # 儿童摄影样本学习与批量创作
 
 将开发者参考样本转化为当前批次的 Style Profile，在人物真实性绝对优先的前提下规划并执行局部编辑。此 Skill 不是选片、去重、联系表、换脸或全帧重绘工具。
 
+## 授权与隐私前提
+
+授权先于读取、处理或上传任何源照片。默认本地优先，永不覆盖原图。不得把儿童照片上传到第三方服务；确需上传时，必须先明确告知具体第三方目的地和用途，并取得用户明确同意。若用户只要求本地元数据检查，明确说明照片与元数据处理保持在本地。
+
 ## 固定主流程
 
 严格执行：
 
 ```text
-读取开发者参考样本
+确认授权与本地/第三方处理边界
+→ 读取开发者参考样本
 → 学习本次风格
 → 提取当前上下文中明确肯定的 Approved Treatment Hints
 → 锁定人物真实性
@@ -24,16 +29,12 @@ description: This skill should be used when children's photographs need develope
 → 交付或安全回退
 ```
 
-先读取并遵循：
+按阶段渐进读取，不要一次预加载全部参考：
 
-- `references/workflow-contract.md`
-- `references/identity-preservation.md`
-- `references/style-learning.md`
-- `references/edit-modes.md`
-- `references/style-recipes.md`
-- `references/batch-consistency.md`
-- `references/qa-and-fallback.md`
-- `references/prompt-templates.md`
+- 授权与任务入口阶段：读取 `references/workflow-contract.md` 和 `references/identity-preservation.md`，先完成授权、隐私与人物锁定检查。
+- 风格学习阶段：仅在编译 Style Profile 时读取 `references/style-learning.md` 和 `references/style-recipes.md`。
+- 编辑规划与提示词阶段：仅在确定模式、Edit Plan 和后端提示词时读取 `references/edit-modes.md` 和 `references/prompt-templates.md`。
+- 批次执行与 QA 阶段：仅在冻结批次、验收或回退时读取 `references/batch-consistency.md` 和 `references/qa-and-fallback.md`。
 
 ## 输入与输出
 
@@ -55,7 +56,7 @@ description: This skill should be used when children's photographs need develope
 
 ## 风格证据隔离
 
-新参考样本是 `Current Style Authority`，决定颜色、主题、背景、光线、元素语言、字体、纹理和构图。无法判断肯定属于风格还是处理方法时，以新样本为准。历史肯定成片只能拆成维度化的 `Approved Treatment Hints`，例如边缘干净度、肤色提亮幅度、元素密度；不得带入旧作品的颜色、主题符号、道具或字体。输出 Style Profile 时区分观测事实、推断值、用户覆盖值和置信度。
+新参考样本是 `Current Style Authority`，决定颜色、主题、背景、光线、元素语言、字体、纹理和构图。无法判断肯定属于风格还是处理方法时，以新样本为准。历史肯定成片只能拆成维度化的 `Approved Treatment Hints`，例如边缘干净度、肤色提亮幅度、元素密度；不得带入旧作品的颜色、主题符号、道具或字体。输出 Style Profile 时为每个维度记录 `styleEvidence`，其 `kind` 只能是 `observed`、`inferred` 或 `user-override`，并记录来源与 `[0,1]` 置信度；推断不得覆盖当前用户覆盖值。
 
 ## 执行纪律
 
