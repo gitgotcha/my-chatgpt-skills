@@ -82,11 +82,11 @@ def documents():
     for path in sorted(REPOSITORY_ROOT.rglob("*")):
         if not path.is_file():
             continue
-        if SKIP_DIRECTORIES.intersection(path.parts):
+        relative = relative_path(path)
+        if SKIP_DIRECTORIES.intersection(pathlib.PurePosixPath(relative).parts):
             continue
         if path.suffix.lower() in SKIP_SUFFIXES:
             continue
-        relative = relative_path(path)
         if relative.startswith(SKIP_RELATIVE_PREFIXES):
             continue
         if relative == relative_path(pathlib.Path(__file__).resolve()):
@@ -95,7 +95,7 @@ def documents():
 
 
 class RepositoryStorageContractTest(unittest.TestCase):
-    def test_repository_documents_are_scanned(self):
+    def test_repository_documents_are_scanned_from_worktree_checkout(self):
         files = list(documents())
         self.assertGreater(len(files), 20, "the scan silently covered nothing")
         names = {relative for relative in (relative_path(path) for path in files)}

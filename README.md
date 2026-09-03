@@ -27,7 +27,7 @@
 | [backend-project-learning](./backend-project-learning/) | 从真实源码学习后端项目与业务链路 | ❌ |
 | [conducting-java-backend-mock-interviews](./conducting-java-backend-mock-interviews/) | Java 后端模拟面试 | ✅ |
 | [reviewing-java-backend-interviews](./reviewing-java-backend-interviews/) | 模拟/真实面试复盘与画像更新 | ✅ |
-| [child-photoShop-skill](./child-photoShop-skill/) | 儿童摄影选片、调色、精修与风格迁移 | ❌ |
+| [child-photography-editing](./child-photography-editing/) | 儿童摄影开发者样本学风格、背景/主题/元素编辑、批量处理与人物不失真 | ❌ |
 | [profile-aware-skill-creator](./profile-aware-skill-creator/) | 创建普通 Skill 或带长期用户画像的 Skill | 按生成目标决定 |
 
 ---
@@ -331,15 +331,15 @@ outputs/interview/<userId>/
 
 ---
 
-# 5. Child Photoshop Skill
+# 5. Child Photography Editing Skill
 
 目录：
 
 ```text
-child-photoShop-skill/
+child-photography-editing/
 ```
 
-这是针对儿童摄影馆工作流设计的后期 Skill。
+这是针对儿童摄影馆工作流设计的样本优先创作与后期 Skill：先由开发者样本学习风格，再进行背景、主题、元素编辑与批量处理，同时保持人物不失真。
 
 核心原则：
 
@@ -351,7 +351,7 @@ child-photoShop-skill/
 
 支持：
 
-- 从模板图学习风格
+- 从开发者样本学习风格
 - Style Profile
 - 批量统一调色
 - 技术质量分析
@@ -368,7 +368,7 @@ child-photoShop-skill/
 
 详细说明：
 
-[child-photoShop-skill/README.md](./child-photoShop-skill/README.md)
+[child-photography-editing/README.md](./child-photography-editing/README.md)
 
 ---
 
@@ -725,7 +725,7 @@ my-chatgpt-skills/
 │
 ├── algorithm-learning/
 ├── backend-project-learning/
-├── child-photoShop-skill/
+├── child-photography-editing/
 ├── conducting-java-backend-mock-interviews/
 ├── java-knowledge-based-on-resume-learn-skill/
 ├── profile-aware-skill-creator/
@@ -934,7 +934,7 @@ Profile 应来自证据，而不是模型印象。
 
 ```text
 algorithm-learning/tests/
-child-photoShop-skill/tests/
+child-photography-editing/tests/
 services/reliable-drive-sync-worker/test/
 tools/reliable-drive-sync-mcp/test/
 ```
@@ -1076,7 +1076,7 @@ Skill Creator
 
 ### 儿童摄影修图
 
-→ [Child Photoshop Skill](./child-photoShop-skill/)
+→ [Child Photography Editing Skill](./child-photography-editing/)
 
 ### 创建新 Skill
 

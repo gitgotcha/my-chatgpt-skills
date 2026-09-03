@@ -7,7 +7,8 @@ Read exactly one workflow before responding:
 - Java 后端模拟面试：`conducting-java-backend-mock-interviews/SKILL.md`
 - 面试记录复盘、报告或画像更新：`reviewing-java-backend-interviews/SKILL.md`
 - 简历驱动的 Java 后端八股学习与每日练习：`java-knowledge-based-on-resume-learn-skill/SKILL.md`
-- 儿童摄影后期（模板图学风格、选片、精修、统一色调）：`child-photoShop-skill/SKILL.md`
+- 儿童摄影创作（开发者样本学风格、背景/主题/元素编辑、批量处理、人物不失真）：`child-photography-editing/SKILL.md`
+  工作流先由开发者样本学习风格，再批量处理，同时保持人物不失真。
 - 显式创建或更新可复用 Skill（仅显式调用，不隐式触发）：`profile-aware-skill-creator/SKILL.md`
 
 ## Persistence contract
