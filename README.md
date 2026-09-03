@@ -54,11 +54,11 @@ flowchart TB
     CREATOR --> PLAIN["普通 Skill"]
     CREATOR --> PROFILE["Profile-aware Skill"]
 
-    ALG -.长期画像.-> SYNC["Reliable Drive Sync"]
+    ALG -.长期画像.-> SYNC["Bundled Reliable Drive Sync"]
     JAVA -.长期画像.-> SYNC
     MOCK -.会话事件.-> SYNC
     REVIEW -.复盘与画像.-> SYNC
-    PROFILE -.通用画像.-> SYNC
+    PROFILE -.通用画像.-> GENERIC["External Generic Profile Runtime"]
 ```
 
 每个 Skill 都有自己的明确责任边界。
@@ -129,7 +129,7 @@ algorithm-learning/
 
 逐层揭示答案。
 
-算法学习完成后，可记录学习事件并生成长期算法画像，用于后续薄弱点分析和每日练习。
+算法学习完成后，会形成一条有证据的学习事件并生成长期算法画像，用于后续薄弱点分析和每日练习。
 
 详细说明：
 
@@ -427,14 +427,14 @@ profile.evidence.recorded
 
 # 7. Reliable Drive Sync
 
-多个需要长期状态的 Skill 共用同一个持久化基础设施。
+多个需要长期状态的 Skill 共用 `submit_event` 协议、全局身份模型和异步回执语义，但当前实现分为两个运行时边界。
 
-架构：
+本仓库内置 Worker/MCP 的现有 Skill 写入链路：
 
 ```mermaid
 flowchart TD
 
-    SKILL["Skill"]
+    SKILL["algorithm / interview / resume-knowledge"]
 
     SKILL --> MCP["submit_event"]
 
@@ -452,6 +452,8 @@ flowchart TD
 
     DRIVE --> ROOT["my-chatGPT-skills/users/<userId>/..."]
 ```
+
+这张图只描述**写入路径**。内置运行时的只读 `interview.session.list`、`interview.session.load` 和 legacy migration dry-run 走 `/v1/query`，不进入 SQLite 或 D1 Outbox。
 
 核心原则：
 
@@ -478,17 +480,44 @@ Skill
 
 本地事件仍可保留并继续重试。
 
+## 7.1 当前持久化边界（Phase 1）
+
+当前有两类彼此独立的业务契约和运行时实现：
+
+- **仓库内置运行时**：`tools/reliable-drive-sync-mcp/` 与 `services/reliable-drive-sync-worker/` 服务 `algorithm`、`interview`、`resume-knowledge` 等既有 Skill-owned 契约，保留各自事件格式、目录和 reducer。
+- **外部通用 Profile 运行时**：新生成的 Profile-aware Skill 使用 `profile` namespace。它先通过 `system.capabilities.read` 确认部署端支持 generic profile，再使用 `system.user.resolve`、`profile.snapshot.read` 和 `profile.evidence.recorded`。本仓库内置 Worker 的事件列表不包含这些通用读写操作，不能替代外部运行时。
+
+两类运行时共享协议基线、全局身份原则和写入回执语义，但只对**写操作**使用两级 Outbox；能力查询、身份解析和 Snapshot 读取都是只读操作，不进入 Outbox。两类数据不会自动互相转换。旧 namespace 数据只读；迁移只能先 dry-run，再由用户明确批准执行。
+
+通用 Profile 的运行顺序为：
+
+```mermaid
+flowchart TD
+    A["system.capabilities.read"] --> B{"generic profile 可用？"}
+    B -->|否| C["跳过画像功能，继续普通业务"]
+    B -->|是| D["system.user.resolve"]
+    D -->|identity_not_found| E["询问是否注册"]
+    E -->|明确同意| F["system.user-registered 写入"]
+    F --> G["稍后再次 resolve，验证身份"]
+    D -->|身份已验证| H["profile.snapshot.read"]
+    G --> H
+    H --> I["完成业务任务"]
+    I -->|满足 recordWhen| J["至多一次 profile.evidence.recorded 写入"]
+```
+
+注册只在 `identity_not_found` 后且用户明确同意时发生。`pending` 或 `cloud_accepted` 的注册回执都不能替代后续成功的 `system.user.resolve`；能力不支持或身份未验证时，只关闭画像功能，普通业务仍继续。
+
 ---
 
 # 8. submit_event
 
-本地 MCP 对上层 Skill **只暴露一个工具**：
+两个运行时都把上层接口收敛为一个工具：
 
 ```text
 submit_event
 ```
 
-统一 envelope：
+但它们支持的 namespace 与 eventType 不同，调用前必须遵循各自的能力与事件契约。下面是仓库内置运行时的写 envelope 示例：
 
 ```json
 {
@@ -522,6 +551,8 @@ submit_event
 ---
 
 # 9. 回执语义
+
+以下语义只适用于进入 Outbox 的写操作。只读操作直接返回查询状态，不产生 `pending` 或 `cloud_accepted` 写回执。
 
 ## cloud_accepted
 
@@ -569,7 +600,7 @@ deliveryState: "pending"
 
 # 10. 全局用户身份
 
-用户身份不是按 Skill 分开的。
+用户身份不是按 Skill 分开的，但两类运行时的解析流程不同。
 
 整个系统使用统一：
 
@@ -594,7 +625,7 @@ Stable userId
 
 等不同领域中都会解析到同一个稳定 `userId`。
 
-业务 Skill 不自行生成 userId。
+业务 Skill 不自行生成 userId。既有 Skill 按各自 contract 调用 `system.user-registered` 完成解析或注册；通用 Profile Skill 必须先 `system.user.resolve`，只有收到 `identity_not_found` 并取得用户明确同意后才能注册，且需在之后再次 resolve 成功才能读取或写入画像。
 
 ---
 
@@ -623,15 +654,22 @@ DriveRoot/
             │   └── profile/
             │       └── snapshots/
             │
-            └── resume-knowledge/
-                ├── sources/
-                ├── question-bank/
+            ├── resume-knowledge/
+            │   ├── sources/
+            │   ├── question-bank/
+            │   ├── events/
+            │   ├── profile/
+            │   │   └── snapshots/
+            │   └── plans/
+            │       └── daily/
+            │
+            └── <profile-domain>/
                 ├── events/
-                ├── profile/
-                │   └── snapshots/
-                └── plans/
-                    └── daily/
+                └── profile/
+                    └── snapshots/
 ```
+
+`<profile-domain>` 代表由外部通用 Profile 运行时验证的非保留 kebab-case domain；路径由运行时从已验证身份和 domain 推导，Skill 不自行拼接文件路径。保留的 `algorithm`、`interview`、`resume-knowledge` 仍由内置专用实现管理。
 
 事件原则上是追加式的。
 
