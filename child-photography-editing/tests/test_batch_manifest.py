@@ -54,6 +54,15 @@ class BatchManifestTest(unittest.TestCase):
         result = finalize_batch(manifest)
         self.assertEqual(result["anchorSourceId"], "b")
 
+    def test_mutating_the_selected_anchor_is_rejected(self):
+        manifest = create_manifest("batch-1", {"palette": ["cream"]})
+        record_item(manifest, {"sourceId": "a", "qa": PASS_QA, "output": "edited/a.png"})
+        record_item(manifest, {"sourceId": "b", "qa": PASS_QA, "output": "edited/b.png"})
+        finalize_batch(manifest)
+        manifest["anchorSourceId"] = "b"
+        with self.assertRaisesRegex(ValueError, "anchor.*mutated"):
+            finalize_batch(manifest)
+
     def test_invalidated_anchor_fails_loudly(self):
         manifest = create_manifest("batch-1", {"palette": ["cream"]})
         record_item(manifest, {"sourceId": "a", "qa": PASS_QA, "output": "edited/a.png"})

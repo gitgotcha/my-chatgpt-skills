@@ -18,6 +18,11 @@ def _lock_hash(batch_lock):
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _anchor_hash(source_id):
+    canonical = json.dumps(source_id, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _assert_frozen_lock(manifest):
     expected = manifest.get("batchStyleLockHash")
     actual = _lock_hash(manifest.get("batchStyleLock"))
@@ -37,6 +42,7 @@ def create_manifest(batch_id, batch_lock):
         "batchStyleLockHash": _lock_hash(frozen_lock),
         "items": [],
         "anchorSourceId": None,
+        "anchorSourceIdHash": None,
         "editedOutputs": [],
         "rejectedOutputs": [],
     }
@@ -61,6 +67,12 @@ def record_item(manifest, item):
 def finalize_batch(manifest):
     _assert_frozen_lock(manifest)
     anchor_source_id = manifest.get("anchorSourceId")
+    anchor_hash = manifest.get("anchorSourceIdHash")
+    if anchor_source_id is None:
+        if anchor_hash is not None:
+            raise ValueError("anchor was mutated after selection")
+    elif anchor_hash != _anchor_hash(anchor_source_id):
+        raise ValueError("anchor was mutated after selection")
     if anchor_source_id is not None:
         matches = [item for item in manifest.get("items", []) if item.get("sourceId") == anchor_source_id]
         if len(matches) != 1 or not item_passes(matches[0]):
@@ -87,6 +99,8 @@ def finalize_batch(manifest):
                 item["deliveryPath"] = rejected_output
                 manifest["rejectedOutputs"].append(rejected_output)
     manifest["anchorSourceId"] = anchor_source_id
+    if anchor_source_id is not None and anchor_hash is None:
+        manifest["anchorSourceIdHash"] = _anchor_hash(anchor_source_id)
     return manifest
 
 
