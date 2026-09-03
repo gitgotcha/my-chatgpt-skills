@@ -305,7 +305,7 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
     if not isinstance(document, dict):
         errors.append(f"{rel}: capability document must be a JSON object")
         return
-    
+
     # Validate top-level fields (only allowed ones)
     allowed_top_fields = {
         "schemaVersion", "domain", "sourceSkill", "dimensions",
@@ -314,7 +314,7 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
     for key in document:
         if key not in allowed_top_fields:
             errors.append(f"{rel}: unknown top-level field {key!r}; allowed fields: {sorted(allowed_top_fields)}")
-    
+
     expected_top = ["schemaVersion", "domain", "sourceSkill", "dimensions",
                     "evidencePolicy", "runtime", "portability"]
     for key in expected_top:
@@ -476,7 +476,7 @@ def validate_skill(skill_dir: Path, mode: str) -> list[str]:
     description = frontmatter.get("description", "")
     if not description.startswith("Use when"):
         errors.append("SKILL.md: description must begin with \"Use when\"")
-    
+
     # Validate frontmatter against the official skill allow-list. The official
     # validator rejects any unknown field, so the project validator must too.
     for field in frontmatter:
