@@ -17,6 +17,8 @@ description: Use when a learner wants to understand a software project, source c
 
 项目学习模式读取 [项目学习与回答评判](references/standard-mode.md)。专业面试模式读取 [专业面试训练](references/interview-mode.md)。不要同时加载两份模式参考。
 
+按当前问题再读取至多一份专业参考：首次梳理项目、表或组件关系时读取 [项目建模](references/project-modeling.md)；追踪真实代码、文件行号或教学注释时读取 [源码追踪](references/source-tracing.md)；分析事务、幂等、并发、异步、性能或优化时读取 [可靠性与优化审查](references/reliability-review.md)。跨越多个主题时先处理当前问题，后续再加载下一份。
+
 ## 建立证据边界
 
 项目特定学习至少需要源码或需求/设计材料之一：

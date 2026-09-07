@@ -27,6 +27,9 @@ class UnifiedSkillContractTest(unittest.TestCase):
         for relative in (
             "references/standard-mode.md",
             "references/interview-mode.md",
+            "references/project-modeling.md",
+            "references/source-tracing.md",
+            "references/reliability-review.md",
             "tests/behavior-scenarios.md",
         ):
             with self.subTest(relative=relative):

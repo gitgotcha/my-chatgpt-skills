@@ -46,6 +46,14 @@
 
 每个新模块固定先给 Mermaid 流程图或关系表。随后按“直接结论 → 贯穿案例 → 必要证据 → 核心问题”推进。同模块追问直接回答，不重复全图；用户说继续时推进下一小步，说停止时停止。
 
+## 专业能力按需加载
+
+- 项目建模：证据分级、业务/系统边界、责任/状态/关联模型、关键不变量和模块路线。
+- 源码追踪：最短调用链、精确文件行号、方法契约、保障机制、失败路径和测试证据。
+- 可靠性审查：故障矩阵、并发时间线、幂等身份、异步回执、最坏路径预算和优化取舍。
+
+局部问题只加载当前所需的一份专业参考，并遵守深度预算：一个教学闭环、一张图或关系表、最多 5 个源码证据节点、一个最相关边界和一个理解题。专业度由可核验的证据、成立条件与风险边界体现，不通过堆叠篇幅体现。
+
 ## 包结构
 
 ```text
@@ -55,6 +63,9 @@ software-project-learning/
 ├── agents/openai.yaml
 ├── references/standard-mode.md
 ├── references/interview-mode.md
+├── references/project-modeling.md
+├── references/source-tracing.md
+├── references/reliability-review.md
 ├── references/copy-paste-prompt.md
 └── tests/
     ├── behavior-scenarios.md

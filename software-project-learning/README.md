@@ -24,6 +24,9 @@
 - 执行规则：[SKILL.md](SKILL.md)
 - 项目学习评分：[standard-mode.md](references/standard-mode.md)
 - 专业面试训练：[interview-mode.md](references/interview-mode.md)
+- 项目建模：[project-modeling.md](references/project-modeling.md)
+- 源码追踪：[source-tracing.md](references/source-tracing.md)
+- 可靠性与优化审查：[reliability-review.md](references/reliability-review.md)
 - 可复制提示：[copy-paste-prompt.md](references/copy-paste-prompt.md)
 - 行为场景：[behavior-scenarios.md](tests/behavior-scenarios.md)
 
