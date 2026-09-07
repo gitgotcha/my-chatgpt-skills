@@ -1,4 +1,0 @@
-interface:
-  display_name: "后端项目学习教练"
-  short_description: "用图表、贯穿案例与关键源码逐步理解后端业务，按需练习面试表达"
-  default_prompt: "请使用 $backend-project-learning 带我逐步理解当前项目，先给流程图或关系表，再用案例和关键源码解释，一次讲清一个问题。"

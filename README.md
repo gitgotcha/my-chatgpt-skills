@@ -24,7 +24,7 @@
 |---|---|---|
 | [algorithm-learning](./algorithm-learning/) | LeetCode、算法题、代码诊断、渐进提示、每日练习 | ✅ |
 | [java-knowledge-based-on-resume-learn-skill](./java-knowledge-based-on-resume-learn-skill/) | 根据个人简历学习 Java 后端八股 | ✅ |
-| [backend-project-learning](./backend-project-learning/) | 从真实源码学习后端项目与业务链路 | ❌ |
+| [software-project-learning](./software-project-learning/) | 从源码或设计材料学习软件项目，可选专业面试模式 | ❌ |
 | [conducting-java-backend-mock-interviews](./conducting-java-backend-mock-interviews/) | Java 后端模拟面试 | ✅ |
 | [reviewing-java-backend-interviews](./reviewing-java-backend-interviews/) | 模拟/真实面试复盘与画像更新 | ✅ |
 | [child-photography-editing](./child-photography-editing/) | 儿童摄影开发者样本学风格、背景/主题/元素编辑、批量处理与人物不失真 | ❌ |
@@ -46,7 +46,7 @@ flowchart TB
 
     LEARN --> ALG["Algorithm Learning"]
     LEARN --> JAVA["Resume-based Java Knowledge"]
-    LEARN --> PROJECT["Backend Project Learning"]
+    LEARN --> PROJECT["Software Project Learning"]
 
     INTERVIEW --> MOCK["Java Backend Mock Interview"]
     MOCK --> REVIEW["Interview Review"]
@@ -69,7 +69,7 @@ flowchart TB
 - Java 八股 Skill 不承担整场面试。
 - 模拟面试 Skill 不负责最终复盘评分。
 - 面试复盘 Skill 不修改原始回答。
-- 后端项目学习 Skill 不允许把教学假设说成真实项目事实。
+- 软件项目学习 Skill 不允许把教学假设或模拟实现说成真实项目事实。
 - 儿童摄影 Skill 不允许为了“美化”改变儿童身份特征。
 - Profile-Aware Skill Creator 不替业务 Skill 决定用户画像应该记录什么。
 
@@ -185,29 +185,29 @@ Skill 不会因为“Java 面试经常考某知识”就自动认为用户简历
 
 ---
 
-## 3.3 Backend Project Learning
+## 3.3 Software Project Learning
 
 目录：
 
 ```text
-backend-project-learning/
+software-project-learning/
 ```
 
-用于逐步理解陌生后端项目的业务与真实实现，一次解决一个问题。
+用于从源码、需求或设计材料逐步理解软件项目，一次解决一个问题。
 
-每个新模块先给流程图或职责关系表，然后以一个贯穿案例展示数据变化，再结合必要源码说明实现保障：
+每个新模块先给流程图或职责关系表，然后以一个贯穿案例展示数据变化，再结合必要源码或明确标注的模拟实现说明机制：
 
 ```text
-图表 → 一句话职责 → 贯穿案例 → 必要源码 → 一句结论
+图表 → 直接结论 → 贯穿案例 → 必要证据 → 核心问题
 ```
 
-同模块追问直接回答，不反复展示整个系统；面试问答和 STAR 按用户要求开启，不属于默认作业。
+项目学习模式会在用户回答核心问题后，按概念正确性、因果完整性、证据与边界、表达清晰度给出 10 分制反馈。专业面试模式在同一学习基础上增加面试追问和表达训练，STAR 按需开启。
 
-项目结论区分源码事实、计划设计、教学假设和优化建议。只有规格时可以学习设计，但不能声称已经实现；有源码时提供核验过的位置、关键片段和教学注释。默认只读，不自动修改源码或写入云端画像。
+项目结论区分源码事实、方案要求、教学假设、模拟实现和优化建议。只有文档时仍可学习设计，但不能声称已经实现；有源码时提供核验过的位置、关键片段和教学注释。默认只读，不自动修改源码或写入云端画像。
 
 详细说明：
 
-[backend-project-learning/README.md](./backend-project-learning/README.md)
+[software-project-learning/README.md](./software-project-learning/README.md)
 
 ---
 
@@ -690,7 +690,7 @@ my-chatgpt-skills/
 ├── AGENTS.md
 │
 ├── algorithm-learning/
-├── backend-project-learning/
+├── software-project-learning/
 ├── child-photography-editing/
 ├── conducting-java-backend-mock-interviews/
 ├── java-knowledge-based-on-resume-learn-skill/
@@ -1028,9 +1028,9 @@ Skill Creator
 
 → [Resume-based Java Knowledge](./java-knowledge-based-on-resume-learn-skill/)
 
-### 学后端项目
+### 学软件项目
 
-→ [Backend Project Learning](./backend-project-learning/)
+→ [Software Project Learning](./software-project-learning/)
 
 ### 模拟 Java 面试
 

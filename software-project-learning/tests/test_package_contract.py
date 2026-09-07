@@ -1,6 +1,6 @@
 """Package integrity only; teaching quality is evaluated with fresh agents.
 
-Run: python -m unittest discover -s backend-project-learning/tests -v
+Run: python -m unittest discover -s software-project-learning/tests -v
 """
 
 import pathlib
@@ -21,7 +21,7 @@ class PackageContractTest(unittest.TestCase):
             and "__pycache__" not in path.parts
             and path.suffix.lower() in {".md", ".yaml", ".yml", ".py"}
         )
-        self.assertGreaterEqual(len(resources), 7, "skill package scan covered too few resources")
+        self.assertGreaterEqual(len(resources), 8, "skill package scan covered too few resources")
         for resource in resources:
             relative = resource.relative_to(SKILL_ROOT).as_posix()
             with self.subTest(resource=relative):
