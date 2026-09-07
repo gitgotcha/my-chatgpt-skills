@@ -20,7 +20,6 @@ AGENTS_MD = REPO_ROOT / "AGENTS.md"
 
 PROTECTED_PATHS = [
     "algorithm-learning",
-    "backend-project-learning",
     "conducting-java-backend-mock-interviews",
     "java-knowledge-based-on-resume-learn-skill",
     "reviewing-java-backend-interviews",
