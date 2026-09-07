@@ -3,7 +3,7 @@
 Read exactly one workflow before responding:
 
 - LeetCode、算法、动态规划、回溯、代码复杂度：`algorithm-learning/SKILL.md`
-- 学习后端源码、业务流程、项目面试：`backend-project-learning/SKILL.md`
+- 学习软件项目、源码、需求、架构、开发方案或项目面试：`software-project-learning/SKILL.md`
 - Java 后端模拟面试：`conducting-java-backend-mock-interviews/SKILL.md`
 - 面试记录复盘、报告或画像更新：`reviewing-java-backend-interviews/SKILL.md`
 - 简历驱动的 Java 后端八股学习与每日练习：`java-knowledge-based-on-resume-learn-skill/SKILL.md`

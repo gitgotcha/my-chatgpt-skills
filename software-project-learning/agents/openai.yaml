@@ -1,0 +1,4 @@
+interface:
+  display_name: "软件项目学习教练"
+  short_description: "从源码或设计材料循序理解软件项目，可选专业面试训练"
+  default_prompt: "请使用 $software-project-learning 带我学习当前软件项目；每个新模块先给流程图或关系表，并根据我是否需要专业面试选择模式。"
