@@ -34,7 +34,21 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 
 审核门：G0=T00 宿主可行性；G1=T01–T05 云端账户；G2=T06–T08 本机与网关；G3=T09–T10 插件与集成；G4=T11 发布。阻断只针对规格、安全、数据正确性与无法恢复的问题；新增非必要变异测试作为技术债，不无限延长门禁。
 
-**重要：当前只有 T00 可以无条件开始。** 可信宿主作用域、安全界面及可移植启动的可行性尚无实测证明。其余任务为 G0 通过后的条件实施计划；若失败则回报并修订规格，不自行改成全局账户或把秘密传给模型。
+**重要：当前只有 T00 可在 R-T00-PRE 通过后开始。** 可信宿主作用域、安全界面及可移植启动的可行性尚无实测证明。其余任务为 G0 通过后的条件实施计划；若失败则回报并修订规格，不自行改成全局账户或把秘密传给模型。
+
+## 审核调度规则（2026-09-08 修订）
+
+本节只分配未来审核，不表示已调用模型、已审核或任务已放行。T00–T11 与 G0–G4 保持不变。执行目标暂定当前 Codex 本机环境；本轮工具清单明确提供 gpt-6-astra，支持 high，定位复杂任务，具备本机源码/测试工具访问能力。相对价格及性能基准未核验，不声称节省具体金额。采用技能默认的 critical/deep 映射；没有凭行数把身份任务降级为 light。
+
+模型快照：model_id=gpt-6-astra；availability=当前 Codex 工具清单可用；levels=deep/critical（路由技能推荐而非性能保证）；reasoning_effort=high；source_access=本机文件及只读诊断；cost=unknown；fallback=none_verified；verified_at=2026-09-08；execution_environment=当前 Codex 本机。实际派发前重新核验。若交 WorkBuddy/ZCode 等其他执行器，不能沿用此清单：先取得其 exact model IDs、reasoning 参数、源码/测试访问能力；未核验时所有相关门 model=null、status=blocked_model_config。本计划使用 manual_handoff，不授权自动创建任务或调用代理。
+
+执行顺序由各任务嵌入的 review 块确定：前置审核只看本任务设计/测试方案，后置审核看实际差异和原始证据。critical 前置审核通过后才实现。阶段 G0–G4 是相关门的汇总，不额外发起一轮全仓重复审核。T10 是 deep 集成证据审核，不重复判断已经冻结的每一行实现。
+
+证据包由执行者在交接时提供：两仓 base/head SHA、变更文件、精确测试命令/版本/退出码、原始脱敏输出、失败与修复记录、前置门结论。缺输入返回 insufficient_evidence，不能用作者总结代替原始证据。任务未实现时缺少 post 证据是正常等待，门维持 pending；到达审核点仍缺证据才退回。
+
+每个问题返回 location、evidence、impact、blocking、proposed_verification。仅违反规格/权限/数据正确性/恢复/预算或缺少必需证据阻断。代码风格、无事实依据的扩展、额外变异建议记录债务，不阻断；新的实际安全缺陷不受此豁免。结论仅 pass、changes_required、insufficient_evidence。
+
+修复复审只发原问题、修复 diff、定向回归与影响接口；未变输入的旧门可复用 SHA 绑定结论。接口变化仅重开依赖它的门。相同阻断两轮修复仍未解决，交用户/人工架构裁定；不无限增审、不用多数票。模型不可用没有已验证等能力替代时停止该门，不能静默换更弱模型。并行审核只有证据与依赖真正独立且用户授权时才使用。
 
 ## 1. 文件职责地图
 
@@ -55,6 +69,8 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 
 ## T00：可信宿主、安全界面与基线验证（G0）
 
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
+
 **Files:** 新建 M/tools/reliable-drive-sync-mcp/test/gateway-host-probe.test.mjs、M/docs/runbooks/account-gateway-host-evidence.md。仅使用合成数据探测。
 
 **Interfaces:** 输出宿主证据：是否有模型不可伪造的 conversation scope、连接是否每会话独立、支持的安全输入与相对启动方法；不得输出真实凭据。T07 只消费经过此门验证的 transportContext。
@@ -72,7 +88,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 运行 M `node --test tools/reliable-drive-sync-mcp/test/gateway-host-probe.test.mjs`。证据包含人工两聊天步骤与脱敏结果；只单测 Map 不能通过 G0。
 - [ ] 显式提交两个文件：`git add tools/reliable-drive-sync-mcp/test/gateway-host-probe.test.mjs docs/runbooks/account-gateway-host-evidence.md`；`git commit -m "test: prove account gateway host isolation"`。
 
+
+### R-T00-PRE
+
+```yaml
+review:
+  id: "R-T00-PRE"
+  tasks: ["T00"]
+  phase: "pre_implementation"
+  after: ["plan_approved"]
+  blocks: ["T00"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "可信会话与安全输入是租户边界"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T00 的 Files、Interfaces、步骤与相关前置结论"
+    - "T00 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "真实两聊天作用域不可由模型伪造；探针不读取真实秘密"
+    - "安全界面、取消路径与可移植启动有原始宿主证据"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T00 的受影响设计或实现；补证据后复审 R-T00-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T00-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T00 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T00-POST
+
+```yaml
+review:
+  id: "R-T00-POST"
+  tasks: ["T00"]
+  phase: "post_implementation"
+  after: ["T00"]
+  blocks: ["T01"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "可信会话与安全输入是租户边界"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T00 的 Files、Interfaces、步骤与相关前置结论"
+    - "T00 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "真实两聊天作用域不可由模型伪造；探针不读取真实秘密"
+    - "安全界面、取消路径与可移植启动有原始宿主证据"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T00 的受影响设计或实现；补证据后复审 R-T00-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T00-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T00 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T01：封闭协议与安全边界
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/shared/account-gateway-protocol.mjs、M/services/reliable-drive-sync-worker/test/account-gateway-protocol.test.js。
 
@@ -98,7 +177,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 重跑同命令全绿；固定请求 UUID、操作返回错误码、所有数值范围测试。
 - [ ] `git add shared/account-gateway-protocol.mjs services/reliable-drive-sync-worker/test/account-gateway-protocol.test.js`；`git commit -m "feat: freeze account gateway protocol"`。
 
+
+### R-T01-PRE
+
+```yaml
+review:
+  id: "R-T01-PRE"
+  tasks: ["T01"]
+  phase: "pre_implementation"
+  after: ["R-T00-POST"]
+  blocks: ["T01"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "DTO 决定身份参数能否绕过网关"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T01 的 Files、Interfaces、步骤与相关前置结论"
+    - "T01 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "拒绝 token/threadId/userIdOverride；规范化边界与封闭参数完整"
+    - "MCP 与 HTTP 秘密通道分离，不能公开姓名查询他人"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T01 的受影响设计或实现；补证据后复审 R-T01-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T01-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T01 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T01-POST
+
+```yaml
+review:
+  id: "R-T01-POST"
+  tasks: ["T01"]
+  phase: "post_implementation"
+  after: ["T01"]
+  blocks: ["T02"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "DTO 决定身份参数能否绕过网关"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T01 的 Files、Interfaces、步骤与相关前置结论"
+    - "T01 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "拒绝 token/threadId/userIdOverride；规范化边界与封闭参数完整"
+    - "MCP 与 HTTP 秘密通道分离，不能公开姓名查询他人"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T01 的受影响设计或实现；补证据后复审 R-T01-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T01-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T01 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T02：同名账户迁移与事务底座
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/services/reliable-drive-sync-worker/migrations/0008_rds2_account_gateway.sql、test/account-gateway-schema.test.js；修改同 Worker 的 test/support/rds2-d1.js，新增 `withAccountD1(callback)`，保留原 withD1 的旧迁移测试能力。
 
@@ -141,7 +283,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 迁移中途失败整批回滚、同名成功、错误 FK 拒绝、pragma foreign_key_check 空结果全部绿。若真实 D1 不支持此迁移顺序，G1 阻断，不采用关闭 FK 绕过。
 - [ ] 显式提交三个文件，消息 `feat: add account gateway storage migration`。
 
+
+### R-T02-PRE
+
+```yaml
+review:
+  id: "R-T02-PRE"
+  tasks: ["T02"]
+  phase: "pre_implementation"
+  after: ["R-T01-POST"]
+  blocks: ["T02"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "不可逆身份约束迁移"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T02 的 Files、Interfaces、步骤与相关前置结论"
+    - "T02 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "真实 D1 外键与全表守恒、失败原子回滚"
+    - "同名不同 UUID，保留既有凭据，不使用关闭外键绕过"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T02 的受影响设计或实现；补证据后复审 R-T02-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T02-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T02 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T02-POST
+
+```yaml
+review:
+  id: "R-T02-POST"
+  tasks: ["T02"]
+  phase: "post_implementation"
+  after: ["T02"]
+  blocks: ["T03"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "不可逆身份约束迁移"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T02 的 Files、Interfaces、步骤与相关前置结论"
+    - "T02 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "真实 D1 外键与全表守恒、失败原子回滚"
+    - "同名不同 UUID，保留既有凭据，不使用关闭外键绕过"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T02 的受影响设计或实现；补证据后复审 R-T02-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T02-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T02 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T03：自助注册及响应丢失恢复
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/services/reliable-drive-sync-worker/src/rds2/accounts/register.js、test/account-gateway-register.test.js。
 
@@ -158,7 +363,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 并发同意图、同凭据不同意图、batch 中间失败、重查不可用、丢响应重试两绑定全绿；全路径最多一次冲突重查。
 - [ ] 显式提交两个文件，消息 `feat: add idempotent self-service registration`。
 
+
+### R-T03-PRE
+
+```yaml
+review:
+  id: "R-T03-PRE"
+  tasks: ["T03"]
+  phase: "pre_implementation"
+  after: ["R-T02-POST"]
+  blocks: ["T03"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "开户与凭据幂等影响账户归属"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T03 的 Files、Interfaces、步骤与相关前置结论"
+    - "T03 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "同意图并发与丢响应唯一 UUID；更换秘密/姓名不能重放"
+    - "禁用账户/撤销凭据拒绝，不泄漏身份或 SQL"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T03 的受影响设计或实现；补证据后复审 R-T03-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T03-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T03 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T03-POST
+
+```yaml
+review:
+  id: "R-T03-POST"
+  tasks: ["T03"]
+  phase: "post_implementation"
+  after: ["T03"]
+  blocks: ["T04"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "开户与凭据幂等影响账户归属"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T03 的 Files、Interfaces、步骤与相关前置结论"
+    - "T03 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "同意图并发与丢响应唯一 UUID；更换秘密/姓名不能重放"
+    - "禁用账户/撤销凭据拒绝，不泄漏身份或 SQL"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T03 的受影响设计或实现；补证据后复审 R-T03-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T03-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T03 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T04：配对创建、原子兑换与恢复
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/services/reliable-drive-sync-worker/src/rds2/accounts/pairings.js、test/account-gateway-pairings.test.js。
 
@@ -176,7 +444,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 已过期、已消费、错误码、来源撤销、目标撤销、各语句注入失败、丢响应恢复、恢复窗口边界全绿。恢复不能用新秘密绕过。
 - [ ] 显式提交两个文件，消息 `feat: add atomic device pairing`。
 
+
+### R-T04-PRE
+
+```yaml
+review:
+  id: "R-T04-PRE"
+  tasks: ["T04"]
+  phase: "pre_implementation"
+  after: ["R-T03-POST"]
+  blocks: ["T04"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "配对并发可导致账户接管"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T04 的 Files、Interfaces、步骤与相关前置结论"
+    - "T04 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "零行消费整批失败、并发唯一兑换、来源有效性事务守卫"
+    - "10分钟过期与24小时同目标秘密恢复，不能给新设备重放"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T04 的受影响设计或实现；补证据后复审 R-T04-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T04-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T04 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T04-POST
+
+```yaml
+review:
+  id: "R-T04-POST"
+  tasks: ["T04"]
+  phase: "post_implementation"
+  after: ["T04"]
+  blocks: ["T05"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "配对并发可导致账户接管"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T04 的 Files、Interfaces、步骤与相关前置结论"
+    - "T04 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "零行消费整批失败、并发唯一兑换、来源有效性事务守卫"
+    - "10分钟过期与24小时同目标秘密恢复，不能给新设备重放"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T04 的受影响设计或实现；补证据后复审 R-T04-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T04-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T04 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T05：HTTP 入口、限流与完整预算（G1）
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/services/reliable-drive-sync-worker/src/rds2/accounts/rate-limit.js、accounts/routes.js、test/account-gateway-routes.test.js；修改 src/index.js、wrangler.toml、wrangler.production.toml。新开关 RDS2_ACCOUNT_GATEWAY_ENABLED=false，两配置均默认 false，旧 RDS2_INIT_ENABLED 保持 false。
 
@@ -190,7 +521,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 新建有界 cleanup 服务于 accounts/rate-limit.js 导出 `cleanupAccounts({io,now})`：每轮总计最多20条过期管理记录；选取后 batch 删除。未过恢复窗口 ticket 不删，已消费 ticket 与 redemption 成对删除；registration_intents 不清理。独立调用不塞进业务请求收尾。
 - [ ] 全入口失败注入、鉴权、限流与日志脱敏测试绿；提交上述六文件，消息 `feat: expose budgeted account gateway routes`。
 
+
+### R-T05-PRE
+
+```yaml
+review:
+  id: "R-T05-PRE"
+  tasks: ["T05"]
+  phase: "pre_implementation"
+  after: ["R-T04-POST"]
+  blocks: ["T05"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "公开入口鉴权与成本安全"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T05 的 Files、Interfaces、步骤与相关前置结论"
+    - "T05 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "可信边缘IP、流式4KiB上限、限流不可用失败关闭"
+    - "成功与故障完整 trace≤20，清理总行数≤20且无IO旁路"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T05 的受影响设计或实现；补证据后复审 R-T05-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T05-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T05 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T05-POST
+
+```yaml
+review:
+  id: "R-T05-POST"
+  tasks: ["T05"]
+  phase: "post_implementation"
+  after: ["T05"]
+  blocks: ["T06"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "公开入口鉴权与成本安全"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T05 的 Files、Interfaces、步骤与相关前置结论"
+    - "T05 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "可信边缘IP、流式4KiB上限、限流不可用失败关闭"
+    - "成功与故障完整 trace≤20，清理总行数≤20且无IO旁路"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T05 的受影响设计或实现；补证据后复审 R-T05-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T05-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T05 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T06：Windows 安全存储、对话框及云端客户端
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/tools/reliable-drive-sync-mcp/gateway/secure-store.mjs、secure-dialog.ps1、account-client.mjs、test/gateway-secure-store.test.mjs、test/gateway-account-client.test.mjs。
 
@@ -203,7 +597,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] account-client HTTPS allowlist 固定服务端 origin，redirect:error；超时保留 intent。输出仅状态/UUID/姓名；注册完成先保存 credentialRef 与 metadata，最后才返回 bound。
 - [ ] 错误、取消、磁盘满、原子改名失败、不同 OS 用户解密失败、进程中断恢复测试绿；显式提交五文件，消息 `feat: add secure local account enrollment`。
 
+
+### R-T06-PRE
+
+```yaml
+review:
+  id: "R-T06-PRE"
+  tasks: ["T06"]
+  phase: "pre_implementation"
+  after: ["R-T05-POST"]
+  blocks: ["T06"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "本机凭据与安全输入通道"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T06 的 Files、Interfaces、步骤与相关前置结论"
+    - "T06 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "DPAPI、私有管道、磁盘失败零发请求，秘密不进入transcript"
+    - "丢响应/metadata失败恢复沿用意图，取消不自动注册"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T06 的受影响设计或实现；补证据后复审 R-T06-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T06-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T06 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T06-POST
+
+```yaml
+review:
+  id: "R-T06-POST"
+  tasks: ["T06"]
+  phase: "post_implementation"
+  after: ["T06"]
+  blocks: ["T07"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "本机凭据与安全输入通道"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T06 的 Files、Interfaces、步骤与相关前置结论"
+    - "T06 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "DPAPI、私有管道、磁盘失败零发请求，秘密不进入transcript"
+    - "丢响应/metadata失败恢复沿用意图，取消不自动注册"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T06 的受影响设计或实现；补证据后复审 R-T06-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T06-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T06 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T07：可信会话存储与切换
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/tools/reliable-drive-sync-mcp/gateway/host-scope.mjs、session-store.mjs、handler.mjs、test/gateway-session.test.mjs。
 
@@ -222,7 +679,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] bind/switch/register/transfer 通过本机界面授权，取消不改绑定；凭据失效转 reauth_required，重启丢弃 session 但保留安全存储。两技能复用一次确认测试绿。
 - [ ] 显式提交四文件，消息 `feat: isolate account bindings by trusted session`。
 
+
+### R-T07-PRE
+
+```yaml
+review:
+  id: "R-T07-PRE"
+  tasks: ["T07"]
+  phase: "pre_implementation"
+  after: ["R-T06-POST"]
+  blocks: ["T07"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "会话 CAS 与权限状态机"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T07 的 Files、Interfaces、步骤与相关前置结论"
+    - "T07 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "可信scope、revision单调、并发切换唯一胜者、不缓存永久授权"
+    - "迟到回包与重启失效，两技能交互只确认一次"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T07 的受影响设计或实现；补证据后复审 R-T07-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T07-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T07 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T07-POST
+
+```yaml
+review:
+  id: "R-T07-POST"
+  tasks: ["T07"]
+  phase: "post_implementation"
+  after: ["T07"]
+  blocks: ["T08"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "会话 CAS 与权限状态机"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T07 的 Files、Interfaces、步骤与相关前置结论"
+    - "T07 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "可信scope、revision单调、并发切换唯一胜者、不缓存永久授权"
+    - "迟到回包与重启失效，两技能交互只确认一次"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T07 的受影响设计或实现；补证据后复审 R-T07-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T07-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T07 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T08：业务工具接线与每账户 Outbox（G2）
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/tools/reliable-drive-sync-mcp/gateway/account-outboxes.mjs、test/gateway-bridge.test.mjs、test/gateway-outbox-migration.test.mjs；修改 stdio-bridge.mjs、start-v2.ps1。按需修改 delivery-service-v2.mjs 的凭据失效停止路径并显式加入该次提交。
 
@@ -235,7 +755,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 迁移旧 outbox-v2.sqlite：先停旧服务取得排他访问并原生 backup；校验每行冻结 UUID，未知行全流程停止。保持原行状态、receipt、IDs、hash、时间，目标事务幂等插入并逐行比对；源库保留只读备份，不删除。迁移标记写成功后才让新服务恢复过期租约；不复制有效 sending 为 pending。
 - [ ] 原 bridge、delivery、Outbox 测试与新测试全绿；真实双会话回归 G0；显式提交列出的文件，消息 `feat: route profile traffic through account gateway`。
 
+
+### R-T08-PRE
+
+```yaml
+review:
+  id: "R-T08-PRE"
+  tasks: ["T08"]
+  phase: "pre_implementation"
+  after: ["R-T07-POST"]
+  blocks: ["T08"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "多账户异步队列与迁移"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T08 的 Files、Interfaces、步骤与相关前置结论"
+    - "T08 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "A队列在B会话仍用A凭据、未绑定拒绝个人读写"
+    - "旧V2队列逐行守恒，未知归属停止迁移，撤销不忙循环"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T08 的受影响设计或实现；补证据后复审 R-T08-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T08-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T08 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T08-POST
+
+```yaml
+review:
+  id: "R-T08-POST"
+  tasks: ["T08"]
+  phase: "post_implementation"
+  after: ["T08"]
+  blocks: ["T09"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "多账户异步队列与迁移"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T08 的 Files、Interfaces、步骤与相关前置结论"
+    - "T08 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "A队列在B会话仍用A凭据、未绑定拒绝个人读写"
+    - "旧V2队列逐行守恒，未知归属停止迁移，撤销不忙循环"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T08 的受影响设计或实现；补证据后复审 R-T08-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T08-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T08 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T09：技能统一与便携发行（G3 前半）
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files（S）:** 新建 account-gateway/SKILL.md、account-gateway/references/runtime-contract.md、scripts/build-plugin.mjs、tests/account-gateway-package.test.mjs、plugin/.codex-plugin/plugin.json、plugin/.mcp.json。修改 AGENTS.md 和下列七目录 SKILL.md 及其存储引用：algorithm-learning、backend-project-learning、conducting-java-backend-mock-interviews、reviewing-java-backend-interviews、java-knowledge-based-on-resume-learn-skill、child-photography-editing、profile-aware-skill-creator。后两者从已验证本机源导入 Git，不覆盖其他五域原功能。
 
@@ -255,7 +838,70 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 新 OS 用户合成安装验证：无个人绝对路径、无预设用户，确认界面取消零开户；新对话发现两个工具；普通答疑未登录仍可用。
 - [ ] 两仓分别显式提交本任务实际变更路径，不 git add -A。消息 S `feat: integrate skills with account gateway`，M `build: package portable account gateway runtime`。
 
+
+### R-T09-PRE
+
+```yaml
+review:
+  id: "R-T09-PRE"
+  tasks: ["T09"]
+  phase: "pre_implementation"
+  after: ["R-T08-POST"]
+  blocks: ["T09"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "插件发行将身份规则传播给所有技能"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T09 的 Files、Interfaces、步骤与相关前置结论"
+    - "T09 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "真实发行清单与Git/安装源差异对账；全部画像技能经网关"
+    - "包版本哈希固定、无个人路径或秘密、新OS安装可用"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T09 的受影响设计或实现；补证据后复审 R-T09-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T09-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T09 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T09-POST
+
+```yaml
+review:
+  id: "R-T09-POST"
+  tasks: ["T09"]
+  phase: "post_implementation"
+  after: ["T09"]
+  blocks: ["T10"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "插件发行将身份规则传播给所有技能"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T09 的 Files、Interfaces、步骤与相关前置结论"
+    - "T09 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "真实发行清单与Git/安装源差异对账；全部画像技能经网关"
+    - "包版本哈希固定、无个人路径或秘密、新OS安装可用"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T09 的受影响设计或实现；补证据后复审 R-T09-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T09-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T09 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T10：完整验收与预算证明（G3）
+
+**Review level:** deep。完成实现后进入 POST；只审集成证据。
 
 **Files:** 新建 M/services/reliable-drive-sync-worker/test/account-gateway-e2e.test.js、test/account-gateway-budget.test.js、M/docs/runbooks/account-gateway-acceptance.md；S 新建 tests/account-gateway-behavior.test.mjs。
 
@@ -274,7 +920,40 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 手工真实宿主双聊天/安全窗口/新OS安装证据附入验收记录；未能自动化的项不得记作自动通过。对应矩阵：A01–04=T02–04/T10；A05–07=T00/T07/T08；A08=T03/T04/T10；A09=T05/T10；A10=T02/T10；A11=T06/T09；A12=T00/T09；A13=T08/T09；A14=T05/T06；A15=T10；A16=T11。
 - [ ] 显式提交四份测试/验收文件到所属仓库，消息 `test: verify account gateway acceptance gates`。
 
+
+### R-T10-POST
+
+```yaml
+review:
+  id: "R-T10-POST"
+  tasks: ["T10"]
+  phase: "post_implementation"
+  after: ["T10"]
+  blocks: ["T11"]
+  level: "deep"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "跨模块验收证据跨度大"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T10 的 Files、Interfaces、步骤与相关前置结论"
+    - "T10 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "A01–A16证据对应生产路径，不以模拟Map代替宿主实验"
+    - "双运行时/双绑定/四域回归与完整预算，未覆盖明确标记"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T10 的受影响设计或实现；补证据后复审 R-T10-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T10-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T10 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## T11：暗部署、合成 canary 与 GitHub 发布（G4）
+
+**Review level:** critical。先 PRE 放行设计，再实施，最后 POST 放行结果。
 
 **Files:** 新建 M/docs/runbooks/account-gateway-release.md；修改发布记录及配置开关，S 记录 runtime/skill commit 与包哈希。只在实施获得发布授权后执行本任务远程步骤。
 
@@ -287,8 +966,71 @@ S 表示技能仓库 C:/Users/27846/my-chatgpt-skills，当前分支 resume-know
 - [ ] 显式提交发布证据；fetch 后检查分叉，冲突停止；按批准的合并流程推送 gitgotcha/my-chatgpt-skills 与 gitgotcha/my-chatgpt-mcp。核验远端 SHA，不能把本机缓存更新说成 GitHub 已更新。
 - [ ] 最终报告真实注册/绑定/学习事实各阶段结果、版本、未完成项、备份位置和新会话提示；不在报告输出秘密或绑定码。
 
+
+### R-T11-PRE
+
+```yaml
+review:
+  id: "R-T11-PRE"
+  tasks: ["T11"]
+  phase: "pre_implementation"
+  after: ["R-T10-POST"]
+  blocks: ["T11"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "发布与迁移有外部不可逆影响"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T11 的 Files、Interfaces、步骤与相关前置结论"
+    - "T11 当前源码基线与本任务测试设计（含原始失败场景）；这些输入由执行者提交后才审核"
+  checks:
+    - "备份可恢复、暗部署先行、测试范围限定、旧管理员入口不恢复"
+    - "开关与包版本匹配、同名迁移不逆转、远端SHA与生产阶段真实核验"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T11 的受影响设计或实现；补证据后复审 R-T11-PRE；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T11-PRE；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T11 的 pre_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
+### R-T11-POST
+
+```yaml
+review:
+  id: "R-T11-POST"
+  tasks: ["T11"]
+  phase: "post_implementation"
+  after: ["T11"]
+  blocks: ["final_delivery"]
+  level: "critical"
+  status: "pending"
+  model: "gpt-6-astra"
+  reasoning_effort: "high"
+  execution_mode: "manual_handoff"
+  reason: "发布与迁移有外部不可逆影响"
+  inputs:
+    - "S/docs/superpowers/specs/2026-09-08-account-gateway-design.md"
+    - "本计划 T11 的 Files、Interfaces、步骤与相关前置结论"
+    - "T11 精确 base/head diff、本任务列出的实际测试命令/退出码/原始脱敏输出"
+  checks:
+    - "备份可恢复、暗部署先行、测试范围限定、旧管理员入口不恢复"
+    - "开关与包版本匹配、同名迁移不逆转、远端SHA与生产阶段真实核验"
+  pass_when:
+    - "上述检查逐项有充分证据且无阻断；只放行该输入版本"
+  on_failure: "退回 T11 的受影响设计或实现；补证据后复审 R-T11-POST；同阻断两轮未解交人工裁定"
+  on_unavailable: "暂停 R-T11-POST；更换执行环境先重新验证清单，否则 blocked_model_config，不静默降级"
+```
+
+审核提示词：审核 T11 的 post_implementation 门，只读不修改代码。先独立阅读上述原始证据，再对照作者说明；逐项检查列出的不变量。返回 pass / changes_required / insufficient_evidence，每项问题包含位置、证据、影响、是否阻断、验证方法。不得假设未执行测试通过，不扩大为全仓重复审核。
+
 ## 自检与交接
 
 规格§1–4映射T01–04；§5映射T00/T07/T08；§6映射T01/T07/T08；§7–8映射T03/T04/T06；§9映射T08；§10映射T02/T05；§11映射T05/T10；§12映射T09；§13映射T10；§14映射T11。
+
+审核块自检：T00–T09/T11 为 critical、各有 PRE/POST；T10 为 deep、仅 POST。共23门，全部 pending，未派发任何审核。依赖 PRE→任务→POST→下一任务，无回指；G0–G4 不增加重复模型轮次。模型不可用及外部执行器未验证时按调度规则阻断。
 
 本计划冻结了业务接口和事务方向，但不伪造宿主支持证据。G0 的结果决定能否实现已批准体验；未通过不启动下游。计划审核后可选同会话按 executing-plans 顺序执行，或用户明确授权后采用分任务代理方式；本轮不执行任何实现任务。
