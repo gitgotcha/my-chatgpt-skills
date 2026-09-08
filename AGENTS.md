@@ -3,12 +3,13 @@
 Read exactly one workflow before responding:
 
 - LeetCode、算法、动态规划、回溯、代码复杂度：`algorithm-learning/SKILL.md`
-- 学习软件项目、源码、需求、架构、开发方案或项目面试：`software-project-learning/SKILL.md`
 - Java 后端模拟面试：`conducting-java-backend-mock-interviews/SKILL.md`
 - 面试记录复盘、报告或画像更新：`reviewing-java-backend-interviews/SKILL.md`
 - 简历驱动的 Java 后端八股学习与每日练习：`java-knowledge-based-on-resume-learn-skill/SKILL.md`
 - 儿童摄影创作（开发者样本学风格、背景/主题/元素编辑、批量处理、人物不失真）：`child-photography-editing/SKILL.md`
   工作流先由开发者样本学习风格，再批量处理，同时保持人物不失真。
+- 学习软件项目、源码、需求、架构、开发方案或项目面试：`software-project-learning/SKILL.md`
+- 根据已批准的设计或开发方案生成或修改软件执行计划，并在计划中配置审核模型与放行门禁：`review-model-routing/SKILL.md`
 - 显式创建或更新可复用 Skill（仅显式调用，不隐式触发）：`profile-aware-skill-creator/SKILL.md`
 
 ## Persistence contract
