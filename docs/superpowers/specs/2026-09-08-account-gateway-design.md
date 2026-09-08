@@ -1,7 +1,7 @@
 # My Chatgpt Skills 账户网关设计规格
 
 日期：2026-09-08  
-状态：设计草案，待用户审核；不是实施完成报告。  
+状态：用户于 2026-09-08 确认进入实施计划；不是实施完成报告。
 适用仓库：gitgotcha/my-chatgpt-skills（插件与技能）、gitgotcha/my-chatgpt-mcp（网关运行时与云端服务）。
 
 ## 1. 已确认需求与边界
