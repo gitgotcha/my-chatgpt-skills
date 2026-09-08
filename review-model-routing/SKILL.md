@@ -13,18 +13,28 @@ Assign concrete reviewer models while authoring the implementation plan and embe
 2. Classify every deliverable by failure impact, reasoning span, and evidence quality. Changed line count never lowers real risk. Missing evidence becomes a concrete prerequisite instead of an assumption.
 3. Read [references/model-profiles.md](references/model-profiles.md). Verify the target execution environment's inventory and select the lowest-cost capable model after honoring explicit user constraints. Use exact model IDs and supported reasoning controls.
 4. Read [references/review-block.md](references/review-block.md). Embed a complete gate in the related task. Critical work receives both `pre_implementation` and `post_implementation` gates. Every new gate starts `pending`.
-5. Check the completed plan: every task has a review level or a reason deterministic/human verification is sufficient; critical gates bracket implementation; models resolve or use `blocked_model_config`; inputs, checks, pass criteria, failure handling, and unavailable-model handling are concrete; dependencies are acyclic.
+5. Check the completed plan: every task has a review level and a concrete model whenever reviewer judgment is needed; a model-free light task has an explicit deterministic/human waiver; critical gates bracket implementation; models resolve or use `blocked_model_config`; inputs, checks, pass criteria, failure handling, and unavailable-model handling are concrete; dependencies are acyclic.
 
 ## Levels
 
 | Level | Evidence | Default review |
 | --- | --- | --- |
-| `light` | Copy, style, behavior-preserving, easy rollback | Deterministic or human verification; light model only when judgment adds value |
+| `light` | Copy, style, behavior-preserving, easy rollback | `gpt-5.6-luna` with `low` reasoning; deterministic or human verification may replace it only when no reviewer judgment is needed |
 | `standard` | Bounded module or local business rule | One post-implementation review |
 | `deep` | Cross-module flow, state machine, compatibility | Deep post-implementation review; split only when evidence differs |
 | `critical` | Authorization, tenant isolation, migration, concurrency, irreversible effects | Pre-implementation design gate and post-implementation evidence gate |
 
 High-risk small patches remain `critical`. Combine reviews only when they share evidence and dependency placement; return a verdict for every related task.
+
+## Default model mapping
+
+When the verified target inventory advertises the ChatGPT Work seed and the user has not supplied a stricter model or budget constraint:
+
+- For `light` review, select `gpt-5.6-luna` with `low` reasoning.
+- For `standard` review, select `gpt-5.6-sol` with `medium` reasoning.
+- For `deep` or `critical` review, select `gpt-6-astra` with `high` reasoning.
+
+A light task may omit a model only when its acceptance is fully deterministic and no reviewer judgment adds value; state that waiver in the task. Do not silently turn a judgment-bearing light review into a human-only check.
 
 ## Outcomes and boundaries
 

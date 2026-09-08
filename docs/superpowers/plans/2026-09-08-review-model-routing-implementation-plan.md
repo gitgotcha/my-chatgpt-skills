@@ -18,6 +18,7 @@
 - Keep exact model IDs and capabilities sourced from the target execution environment. Unknown data remains unknown.
 - New review gates start `pending`; future model selection never implies that a review ran or passed.
 - Critical tasks receive both pre-implementation and post-implementation gates.
+- Judgment-bearing `light` reviews default to `gpt-5.6-luna` with `low` reasoning; a model-free light waiver requires a fully deterministic acceptance and an explicit reason.
 - Prefer the lowest-cost model that satisfies the verified risk requirements.
 - Do not create a per-Skill README, script, schema, or empty directory.
 
@@ -27,7 +28,7 @@ The following IDs and reasoning controls were available in ChatGPT Work when thi
 
 | Review level | Model | Reasoning effort | Use in this plan |
 | --- | --- | --- | --- |
-| Light | `gpt-5.6-luna` | `low` | Documentation judgment only when deterministic checks are insufficient |
+| Light | `gpt-5.6-luna` | `low` | Default reviewer for judgment-bearing light work; deterministic waiver only when no judgment is needed |
 | Standard | `gpt-5.6-sol` | `medium` | Root routing integration |
 | Deep / Critical | `gpt-6-astra` | `high` | Core Skill semantics and behavioral coverage |
 
@@ -167,7 +168,7 @@ Assign concrete reviewer models while authoring the implementation plan and embe
 
 | Level | Evidence | Default review |
 | --- | --- | --- |
-| `light` | Copy, style, behavior-preserving, easy rollback | Deterministic or human verification; light model only when judgment adds value |
+| `light` | Copy, style, behavior-preserving, easy rollback | Use `gpt-5.6-luna` with low reasoning by default; deterministic or human verification may replace it only when no reviewer judgment is needed |
 | `standard` | Bounded module or local business rule | One post-implementation review |
 | `deep` | Cross-module flow, state machine, compatibility | Deep post-implementation review; split only when evidence differs |
 | `critical` | Authorization, tenant isolation, migration, concurrency, irreversible effects | Pre-implementation design gate and post-implementation evidence gate |
@@ -284,7 +285,7 @@ Create `review-model-routing/tests/behavior-scenarios.md`:
 ## copy-only
 
 Input: change one settings-page button label with no behavior change.
-Expected: `light`; deterministic visual/copy verification is sufficient unless judgment adds value; no mandatory deep-model call.
+Expected: `light`; reviewer `gpt-5.6-luna` with `low` reasoning; deterministic visual/copy checks are inputs and no deep-model call is needed. A model-free waiver is allowed only when the acceptance is fully mechanical and reviewer judgment adds no value.
 
 ## bounded-csv-export
 
@@ -330,7 +331,7 @@ Dispatch a fresh agent with the target model inventory from this plan and the fi
 
 Expected evidence:
 
-- copy-only receives a light/no-model justification;
+- copy-only receives a light Luna review, or an explicit model-free waiver only when acceptance is fully deterministic;
 - bounded CSV export receives one standard post gate;
 - tenant isolation and outbox transaction each receive critical pre/post gates;
 - the missing-inventory variant produces `blocked_model_config` rather than invented IDs;

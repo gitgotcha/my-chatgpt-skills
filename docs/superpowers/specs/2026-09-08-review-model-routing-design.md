@@ -22,7 +22,7 @@ Classify work by failure impact, reasoning span, and evidence quality. Changed l
 
 | Level | Typical work | Default gate |
 | --- | --- | --- |
-| Light | Copy, style, behavior-preserving edits | Deterministic or human verification; use a light model only when judgment adds value |
+| Light | Copy, style, behavior-preserving edits | Use `gpt-5.6-luna` with low reasoning by default; deterministic or human verification may replace it only when no reviewer judgment is needed |
 | Standard | One bounded module or local business rule | One post-implementation review |
 | Deep | Cross-module behavior, state machines, compatibility work | Deep post-implementation review; split concerns only when the evidence differs |
 | Critical | Authorization, tenant isolation, migration, concurrency, irreversible effects | Pre-implementation design gate and post-implementation evidence gate |
@@ -33,7 +33,7 @@ High-risk one-line patches remain critical. Reviews may be combined only when th
 
 Read the target environment's current model inventory. Each profile records the exact model ID, availability, supported reasoning controls, source/tool access, suitability, relative cost evidence, fallback, source, and verification date.
 
-Filter out unavailable or incapable models, honor explicit user constraints, then choose the lowest-cost remaining candidate. Unknown price or capability remains unknown. The Skill never invents prices, model IDs, or support for `reasoning_effort`.
+Filter out unavailable or incapable models, honor explicit user constraints, then choose the lowest-cost remaining candidate. For a verified ChatGPT Work inventory, the default mapping is light → `gpt-5.6-luna` (low), standard → `gpt-5.6-sol` (medium), and deep/critical → `gpt-6-astra` (high). Unknown price or capability remains unknown. The Skill never invents prices, model IDs, or support for `reasoning_effort`.
 
 If the target model inventory is unavailable, author the rest of the plan and mark affected gates `blocked_model_config` with `model: null`. Such a plan is not ready for unattended execution.
 
@@ -82,7 +82,7 @@ tests/
 
 - Plan-generation requests discover this Skill without an explicit mention.
 - Project-learning and Skill-creation requests keep their existing routes.
-- A copy edit is not over-reviewed; a one-line tenant-isolation fix remains critical.
+- A copy edit receives a light Luna review by default; a model-free waiver is allowed only when acceptance is fully deterministic and reviewer judgment adds no value. A one-line tenant-isolation fix remains critical.
 - Critical work receives both pre- and post-implementation gates.
 - Missing model configuration produces an explicit blocked gate.
 - Every gate has concrete inputs, checks, pass criteria, failure handling, and a future `pending` status.

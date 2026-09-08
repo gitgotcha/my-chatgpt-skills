@@ -3,7 +3,7 @@
 ## copy-only
 
 Input: change one settings-page button label with no behavior change.
-Expected: `light`; deterministic visual/copy verification is sufficient unless judgment adds value; no mandatory deep-model call.
+Expected: `light`; reviewer `gpt-5.6-luna` with `low` reasoning; deterministic visual/copy checks are inputs and no deep-model call is needed. A model-free waiver is allowed only when the acceptance is fully mechanical and reviewer judgment adds no value.
 
 ## bounded-csv-export
 
