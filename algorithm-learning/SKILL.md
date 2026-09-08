@@ -32,38 +32,13 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
 
-所有算法事件先由本地 MCP 写入 SQLite Outbox，再经 Worker `/v1/jobs` 进入 D1 Outbox，最后由 QStash/Worker 异步写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。本领域的事件、快照与每日题单分别位于 `users/<userId>/algorithm/events/`、`users/<userId>/algorithm/profile/snapshots/` 和 `users/<userId>/algorithm/plans/daily/`；Skill 不回退到旧目录，也不直接写 Drive。
+所有持久化遵守 [RDS V2 运行契约](references/rds-v2-runtime.md)，先核对凭据绑定身份，再读取 algorithm/learning。首次只读调用不会注册用户或创建 Outbox。
 
-### 按姓名解析用户
+### 学习记录
+答疑后仅提交有证据的 `algorithm.learning.completed`。事件使用已有 schema-1.2 字段，详见 [算法字段契约](references/algorithm-profile-contract.md)。没有掌握度证据时记录中性的 `consulted`；不要推断弱点或评分。已提交事实保持 requestId/eventId/eventKey 不变，等待本机队列投递。
 
-1. 新算法对话先暂存用户请求，再取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用唯一 MCP 工具 `submit_event`，发送 `schemaVersion:"1.2"`、`namespace:"system"`、
-   `eventType:"system.user-registered"`，payload 为 `{displayName}`，由注册阶段完成按姓名的解析与注册。
-3. Worker 只按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表：命中唯一用户时返回已有
-   `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，
-   不自动合并、不静默挑选。
-4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才处理暂存的请求。
-5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：注册与解析都由 `submit_event`
-   在一次调用内完成。
-6. 同一对话后续请求沿用绑定身份，除非用户明确要求切换用户；切换时解除绑定并重新按姓名解析。
+### 每日练习
+按 [每日协议](references/algorithm-daily-protocol.md) 使用完整的 V2 分页画像。未完成题在下一日优先；7 日内不重复同题；默认 3–5 道循序渐进练习，首次不提供答案。画像缺失或还在构建时不假定历史；明确报告尚不能基于最新画像出题。用户反馈后只新增学习事件，不覆盖题单或直接修改分数。
 
-### 追加式学习记录
-
-1. 答疑完成后构造完整的 schema-1.2 学习事件，并调用唯一 MCP 工具 `submit_event`：
-   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，顶层 `identity` 为
-   `{username}`，可附带上一步返回的 `userId`，payload 仅为 `{event}`。事件本身必须包含匹配的 `username`、
-   UUID `eventId`、`eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
-2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
-3. Worker 负责把事件追加到规范目录、按 `eventKey` 去重，并从全部已验证事件重建算法画像快照；Skill 不直接读写 Drive。
-4. 只按本地 MCP 的 `deliveryState` 解释提交结果：`cloud_accepted` 表示事件已先落 SQLite，且 D1 Outbox 已返回有效 `jobId`；可以称“已提交并进入云端队列”，但 `persistence.drive` 仍为 `pending`，不得称“Drive 已保存”。`pending` 表示事件仍安全保存在 SQLite、尚未确认进入 D1 Outbox；说明“已在本机排队等待重试”。两种状态都不要求 Skill 自行重发或直接访问 Drive，同一 `requestId` 由两级 Outbox 保证幂等。
-5. 收到 `完成 1、3，2 不会` 一类打卡时，把题号、状态和明确卡点写为新事件；未完成题在下一日优先保留。
-
-## 专项检查与回答前检查
-
-回溯、动态规划、二叉树或图题读取 [references/special-topic-checklists.md](references/special-topic-checklists.md) 的对应部分；不要把不适用项强加给答案。
-
-- 是否真正定位到用户代码的问题，并保持最小修改？
-- 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
-- 是否已通过姓名解析拿到已注册用户的 `userId`，并以事件记录明确证据？
-- 是否根据 `deliveryState` 准确区分 D1 Outbox 已接收与仅在 SQLite 排队，并避免声称 Drive 已完成？
-- 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？
+## 专项检查
+回溯、动态规划、二叉树或图题读取 [专项清单](references/special-topic-checklists.md) 对应部分。保持用户语言、最小改动、真实反例与复杂度。保存状态严格按 V2 回执区分本机、D1、投影、Drive。

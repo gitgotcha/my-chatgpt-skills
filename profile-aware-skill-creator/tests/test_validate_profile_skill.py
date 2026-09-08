@@ -26,10 +26,10 @@ VALIDATOR_PATH = SKILL_ROOT / "scripts" / "validate_profile_skill.py"
 RUNTIME_TOOL = "submit_event"
 RUNTIME_OPERATIONS = {
     "tool": RUNTIME_TOOL,
-    "capabilitiesEvent": "system.capabilities.read",
-    "identityResolveEvent": "system.user.resolve",
-    "identityRegisterEvent": "system.user-registered",
-    "profileReadEvent": "profile.snapshot.read",
+    "capabilitiesEvent": "capabilities",
+    "identityResolveEvent": "user.resolve",
+    "identityRegisterEvent": "admin_only",
+    "profileReadEvent": "projection.read",
     "evidenceWriteEvent": "profile.evidence.recorded",
     "directDriveAccess": False,
 }

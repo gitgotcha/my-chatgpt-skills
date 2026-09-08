@@ -57,7 +57,7 @@ users/<userId>/interview/events/
 outputs/interview/<userId>/interview-<sessionId>-session.json
 ```
 
-本地 JSON 不上传，也不是画像快照来源。`cloud_accepted` 只表示 D1 已接收；`pending` 表示仍在本机排队。二者都不能描述为 Drive 已完成。
+V2：pending 表示本机排队；d1_committed 表示云端账本接收；投影和 Drive 归档通过 event.status 分别核验。遵守 references/rds-v2-runtime.md，不再使用 V1 cloud_accepted 回执。
 
 ## 与 Interview Review 的关系
 

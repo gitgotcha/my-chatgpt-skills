@@ -62,3 +62,7 @@ description: Use when a learner wants to understand a software project, source c
 - 对话内分数只评价一次具体回答；不自动写笔记、云端画像或长期掌握度。
 
 用户要求在其他对话复用时，读取 [可复制学习提示](references/copy-paste-prompt.md)。行为维护场景见 [测试场景](tests/behavior-scenarios.md)。
+
+## RDS V2 接入
+
+用户要求记录学习进度时，先按 [RDS V2 运行契约](references/rds-v2-runtime.md) 核对身份并读取 `profile/backend-project-learning`。只记录用户明确回答、完成或卡点，通过 `profile.evidence.recorded` 提交文字证据；讲过不等于掌握。默认只读源码，不上传仓库内容。

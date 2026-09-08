@@ -76,3 +76,7 @@ python scripts/validate_profile_skill.py --mode profile <resolved-target-skill-d
 
 The directory argument is always the user's resolved target path, never a
 default location.
+
+## RDS V2 接入
+
+生成画像技能时必须使用 [RDS V2 运行契约](references/rds-v2-runtime.md) 和更新后的 submit-event-runtime.md。身份通过凭据校验，注册为管理员操作；capabilities/user.resolve/projection.read/event.status 使用 storageVersion:2 原生查询。普通技能创建不产生用户学习事件。

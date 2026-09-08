@@ -19,17 +19,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 
 PROTECTED_PATHS = [
-    "algorithm-learning",
-    "conducting-java-backend-mock-interviews",
     "java-knowledge-based-on-resume-learn-skill",
-    "reviewing-java-backend-interviews",
     "cloud-mcp",
 ]
 
 NEW_LOGICAL_OPERATIONS = [
-    "system.capabilities.read",
-    "system.user.resolve",
-    "profile.snapshot.read",
+    "capabilities",
+    "user.resolve",
+    "projection.read",
+    "event.status",
     "profile.evidence.recorded",
 ]
 
@@ -76,23 +74,19 @@ class PersistenceContractTest(unittest.TestCase):
         for operation in NEW_LOGICAL_OPERATIONS:
             self.assertIn(operation, self.text, f"missing operation {operation}")
 
-    def test_generic_receipts_are_asynchronous_without_drive_fileid(self) -> None:
+    def test_v2_receipts_separate_d1_projection_and_archive(self) -> None:
         flattened = " ".join(self.text.split())
         self.assertIn("pending", flattened)
-        self.assertIn("cloud_accepted", flattened)
-        self.assertIn("fileId", flattened)
-        self.assertIn("no immediate Drive", flattened)
+        self.assertIn("d1_committed", flattened)
+        self.assertIn("projected", flattened)
+        self.assertIn("archived", flattened)
 
-    def test_existing_skills_are_not_migrated(self) -> None:
-        flattened = " ".join(self.text.split()).lower()
-        self.assertTrue(
-            any(phrase in flattened for phrase in
-                ["not migrate", "not migrated", "does not migrate"]),
-            "Phase 1 non-migration of existing skills must be documented",
-        )
+    def test_v1_compatibility_boundary_is_documented(self) -> None:
+        self.assertIn("V1 compatibility", self.text)
+        self.assertIn("java-knowledge-based-on-resume-learn-skill", self.text)
 
     def test_capability_negotiation_is_documented(self) -> None:
-        self.assertIn("system.capabilities.read", self.text)
+        self.assertIn("capabilities", self.text)
         self.assertIn("reliable-drive-sync", self.text)
 
 

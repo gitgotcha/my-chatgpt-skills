@@ -1,20 +1,5 @@
-# Google Drive 运行时存储约定
+# V2 存储运行约定
 
-Google Drive 只作为最终存储层，由 Worker 异步访问。Skill 本身、每日任务模板和辅助脚本都不读取或写入 Drive：所有事件只通过本地 `submit_event` 先落 SQLite Outbox，再进入 D1 Outbox。
+本文件入口保留以兼容现有引用。当前有效规则全部见 [RDS V2 运行契约](rds-v2-runtime.md)。唯一远端入口为 submit_event；读取 D1 物化画像，事件先落本机 V2 Outbox，云端异步归档。
 
-运行时根目录必须由本次会话确认，或由独立任务提示显式给出；通用 Skill 不硬编码个人文件 ID。
-
-所有新写入使用创建文件操作与唯一文件名；**禁止调用任何“更新文件内容”的接口**。不得覆盖、追加、删除或移动旧版注册索引、事件日志与历史快照文件。JSON 使用 UTF-8。
-
-写入一律落在唯一规范根 `DriveRoot/my-chatGPT-skills/` 下：`user-registry/` 保存全局注册，
-`users/<userId>/` 保存身份与 `algorithm/`、`interview/`、`resume-knowledge/` 三个领域目录。
-领域子目录按首次物化需要创建，不要求预先建立空目录。
-
-初始化时先验证根目录，再创建用户目录与需要的领域目录。创建 `identity.json` 和
-`registration-<userId>.json` 后分别读回并校验 `schemaVersion: 1.2`、`userId`、`username` 与父目录；两者都成功才视为注册完成。迁移时可只读校验旧 `1.0`/`1.1` 身份锁，不得覆盖它。
-
-每次答疑写入前先解析或注册用户；已存在相同 `eventKey` 时不再创建。本地 MCP 的 `deliveryState: "cloud_accepted"` 只确认 D1 Outbox 接收，`pending` 只确认 SQLite 持久排队。QStash/Worker 后续写入 `event-<eventId>.json` 并从全部去重事件重建快照；Skill 不等待或伪造 Drive 文件回执。
-
-读取优先使用规范目录；规范目录缺失时才由只读兼容器回退到旧 namespace 目录。任何写入失败都不得回退到旧路径。
-
-读取时校验每条事件和快照的身份、schema 与父目录。重复事件保留文件创建时间最早的有效记录，快照只有覆盖全部有效事件键时才可使用。Google Drive 没有 ETag/If-Match 条件更新并不影响该模型：并发请求各自创建事件，后续读取会从完整事件集合重建快照。
+不使用旧 Drive 路径、注册事件或历史全扫描。面试 JSON/DOCX 继续保存在 outputs/interview/<userId>/ 下作为本地派生输出，不能作为画像数据源。写回执不能推断 Drive 完成。
