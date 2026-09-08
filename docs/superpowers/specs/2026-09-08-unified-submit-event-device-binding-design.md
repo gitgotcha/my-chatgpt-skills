@@ -2,7 +2,7 @@
 
 日期：2026-09-08
 
-状态：根据用户已确认方向编写，待书面规格审核；尚未实施。替代 2026-09-08-account-gateway-design.md。旧账户网关实施计划及其审核门不能直接执行，需要按本规格重编。
+状态：用户已确认据此编写实施计划；尚未实施。替代 2026-09-08-account-gateway-design.md。现行计划为 ../plans/2026-09-08-unified-submit-event-device-binding-implementation.md；旧账户网关计划及审核门停用。
 
 ## 1. 目标与授权范围
 
