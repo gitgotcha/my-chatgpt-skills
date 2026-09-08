@@ -1,0 +1,7 @@
+interface:
+  display_name: "审核模型路由"
+  short_description: "为软件执行计划按风险配置具体审核模型和放行门禁"
+  default_prompt: "Use $review-model-routing to generate an implementation plan with concrete reviewer models, evidence, checks, and pass gates embedded in each relevant task."
+
+policy:
+  allow_implicit_invocation: true
