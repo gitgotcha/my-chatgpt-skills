@@ -1,5 +1,7 @@
 # My Chatgpt Skills 账户网关设计规格
 
+> 历史版本，已由 [统一 submit_event 与本机绑定 Revision 2](2026-09-08-unified-submit-event-device-binding-design.md) 替代。以下独立 account_gateway 工具和每会话绑定设计不再执行。
+
 日期：2026-09-08  
 状态：用户于 2026-09-08 确认进入实施计划；不是实施完成报告。
 适用仓库：gitgotcha/my-chatgpt-skills（插件与技能）、gitgotcha/my-chatgpt-mcp（网关运行时与云端服务）。

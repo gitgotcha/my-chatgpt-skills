@@ -1,5 +1,7 @@
 # Account Gateway Implementation Plan
 
+> **暂停执行，待重编。** 用户已改为单一 submit_event 与同机同 Windows 用户持久绑定。请以 [Revision 2 规格](../specs/2026-09-08-unified-submit-event-device-binding-design.md) 为准；本计划任务及23个审核门只保留为历史，不能据此开始开发或沿用审核结论。本轮仅标记失效，未重新编排任务或审核模型。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 只有用户另行选择并行代理后才使用 superpowers:subagent-driven-development。
 
 **Goal:** 在 My Chatgpt Skills 中交付可自助注册、安全绑定、会话复用且严格隔离用户画像的账户网关。
