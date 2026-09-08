@@ -55,6 +55,19 @@ class ReviewModelRoutingContractTest(unittest.TestCase):
         ):
             self.assertIn(field, review_block)
 
+    def test_light_review_defaults_to_luna(self):
+        scenarios = (SKILL_ROOT / "tests/behavior-scenarios.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "For `light` review, select `gpt-5.6-luna` with `low` reasoning",
+            self.skill,
+        )
+        self.assertIn(
+            "Expected: `light`; reviewer `gpt-5.6-luna` with `low` reasoning",
+            scenarios,
+        )
+
     def test_behavior_scenarios_cover_risk_and_configuration_edges(self):
         scenarios = (SKILL_ROOT / "tests/behavior-scenarios.md").read_text(
             encoding="utf-8"

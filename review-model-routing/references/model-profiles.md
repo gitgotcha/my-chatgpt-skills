@@ -22,4 +22,6 @@ Use this seed only when the target environment currently advertises these exact 
 
 Source: ChatGPT Work model selector metadata verified 2026-09-08. It describes Luna as fast/economical, Sol as a reliable daily agentic model, and Astra as the most capable model for complex work. This is a routing seed, not a performance benchmark or price claim. Reverify availability and parameter support at use time.
 
+When this inventory is verified and no user constraint overrides it, use Luna as the default reviewer for every judgment-bearing `light` gate. A deterministic or human-only waiver is valid only when the task's acceptance is fully mechanical and reviewer judgment adds no value; record that reason in the task instead of silently omitting the model.
+
 When no valid inventory exists, preserve review level, scope, evidence, and dependency placement; set `model: null` and `status: blocked_model_config`, then list the exact target-environment metadata needed to unblock execution.

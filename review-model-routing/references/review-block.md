@@ -30,6 +30,8 @@ review:
 
 Omit `reasoning_effort` when unsupported. Use `automatic` only with a verified dispatch mechanism; otherwise write `manual_handoff`. Pre-implementation inputs contain the design, current source, test design, and risk controls. Post-implementation inputs add the exact diff/version and actual verification output.
 
+For a judgment-bearing `light` gate, instantiate `model: "gpt-5.6-luna"` and `reasoning_effort: "low"` when the target inventory verifies those fields. A model-free light gate must include an explicit deterministic/human waiver in its task; do not use the waiver to avoid selecting Luna.
+
 Attach an instantiated prompt:
 
 > Review task T-01 at the post-implementation gate. Review only; do not modify code. Read the approved design, the T-01 diff against the named base commit, and the captured test result. Check each listed invariant. First assess the raw evidence independently, then compare the implementer's explanation. Return `pass`, `changes_required`, or `insufficient_evidence`. For every issue provide location, evidence, impact, blocking status, and a proposed verification method. Do not assume missing tests passed. The verdict applies only to the named input version.
