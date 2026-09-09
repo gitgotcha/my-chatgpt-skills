@@ -20,7 +20,7 @@
 
 ## 1. 项目能力总览
 
-目前仓库包含 8 个主要 Skill。
+目前仓库包含 7 个主要 Skill。
 
 | Skill | 主要用途 | 长期画像 |
 |---|---|---|
@@ -31,7 +31,6 @@
 | [reviewing-java-backend-interviews](./reviewing-java-backend-interviews/) | 模拟/真实面试复盘与画像更新 | ✅ |
 | [child-photography-editing](./child-photography-editing/) | 儿童摄影开发者样本学风格、背景/主题/元素编辑、批量处理与人物不失真 | ❌ |
 | [profile-aware-skill-creator](./profile-aware-skill-creator/) | 创建普通 Skill 或带长期用户画像的 Skill | 按生成目标决定 |
-| [review-model-routing](./review-model-routing/) | 生成或修改软件执行计划时，按风险内嵌具体审核模型与放行门禁 | ❌ |
 
 ---
 
@@ -46,7 +45,6 @@ flowchart TB
     ROOT --> INTERVIEW["面试系统"]
     ROOT --> PHOTO["儿童摄影系统"]
     ROOT --> CREATOR["Skill Creator"]
-    ROOT --> PLAN["Review Model Routing"]
 
     LEARN --> ALG["Algorithm Learning"]
     LEARN --> JAVA["Resume-based Java Knowledge"]
@@ -76,7 +74,6 @@ flowchart TB
 - 软件项目学习 Skill 不允许把教学假设或模拟实现说成真实项目事实。
 - 儿童摄影 Skill 不允许为了“美化”改变儿童身份特征。
 - Profile-Aware Skill Creator 不替业务 Skill 决定用户画像应该记录什么。
-- Review Model Routing 在计划生成阶段配置审核模型，不执行开发或伪造审核结果。
 
 这种拆分让每个 Skill 都可以单独测试、演进和替换。
 
@@ -393,26 +390,6 @@ profile.evidence.recorded
 详细说明：
 
 [profile-aware-skill-creator/README.md](./profile-aware-skill-creator/README.md)
-
----
-
-# 6.1 Review Model Routing
-
-目录：
-
-```text
-review-model-routing/
-```
-
-用于根据已批准的设计或开发方案生成、修改软件执行计划。它按照失败后果、推理跨度和证据充分度评估任务，并把具体模型（审核模型）、审核输入、检查项、放行条件和失败处理直接写进相关任务。
-
-默认审核路由为：轻量任务使用 `gpt-5.6-luna`，标准任务使用 `gpt-5.6-sol`，深度或关键任务使用 `gpt-6-astra`；只有完全机械、无需审核判断的轻量任务才可以显式采用确定性/人工校验豁免。
-
-关键任务会同时获得实施前方案审核和实施后源码/验证证据审核。小改动不会仅因代码行数少而自动降级；无法核验目标执行环境的模型清单时，相关门禁会明确标记为模型配置受阻，不会编造模型或假装审核已经完成。
-
-详细说明：
-
-[review-model-routing/SKILL.md](./review-model-routing/SKILL.md)
 
 ---
 
@@ -1072,10 +1049,6 @@ Skill Creator
 ### 创建新 Skill
 
 → [Profile-Aware Skill Creator](./profile-aware-skill-creator/)
-
-### 生成带审核模型的开发执行计划
-
-→ [Review Model Routing](./review-model-routing/)
 
 ### 查看云端同步架构
 
