@@ -54,11 +54,11 @@ on the previous one, so do not skip ahead.
    profile`) and keep the forward-test evidence: run the validator and the
    generated contract tests before declaring the work finished.
 
-## `profile-capability.json` is not `system.capabilities.read`
+## `profile-capability.json` is not `capabilities` (storageVersion:2)
 
 `schemas/profile-capability.json` configures a Skill's domain and evidence
 vocabulary: its dimensions, its record-when rules, and the runtime operation
-names it depends on. `system.capabilities.read` is a live protocol call that
+names it depends on. `capabilities` (storageVersion:2) is a live protocol call that
 reports whether the deployed runtime currently supports the generic profile
 protocol. One is a static authoring artifact; the other is a runtime probe.
 They cannot substitute for each other, and a valid capability file never
@@ -98,14 +98,13 @@ profile contract; a placeholder (for example a single `self.assertTrue(True)`)
 is rejected by the validator. Each behavior must appear in the test source by
 an unambiguous token, and at least four tests must run and pass:
 
-1. **Capability preflight and fail-closed** — call `system.capabilities.read`
+1. **Capability preflight and fail-closed** — call `capabilities` (storageVersion:2)
    before any profile operation; when the capability is unsupported, continue
    the business task without profile features.
 2. **User consent before profile mutation** — resolve the user with
-   `system.user.resolve`, and only call `system.user-registered` after explicit
-   consent; never auto-register.
+   `user.resolve` (storageVersion:2), using the configured credential. Registration is administrator-only; never enqueue it as evidence.
 3. **Immutable, read-only evidence** — emit only `profile.evidence.recorded`
-   events; `profile.snapshot.read` is read-only and the Skill never writes or
+   events; `projection.read` (storageVersion:2) is read-only and the Skill never writes or
    overwrites a snapshot; no direct Drive or file-path access.
 4. **Full scan and preservation of existing files** — when updating an existing
    Skill, read every existing file before writing, preserve unrelated files

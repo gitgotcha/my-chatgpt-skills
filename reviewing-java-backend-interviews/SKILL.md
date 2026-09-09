@@ -5,21 +5,8 @@ description: Use when reviewing a mock or real interview for a user resolved by 
 
 # Java 后端面试复盘
 
-本 Skill 负责按姓名解析用户、历史会话选择、逐题复盘、结构化画像变化和本地报告生成。所有远端交互只能使用唯一的 `submit_event` MCP 工具；写事件时先落本机 SQLite Outbox，再由 Worker `/v1/jobs` 接收入 D1 Outbox 并异步写 Drive。本 Skill 不调用其他远端工具，也不把本地报告作为画像输入。
 
-所有云端数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。复盘事件由 Worker 追加到 `users/<userId>/interview/events/`，画像快照由 Worker 物化到 `users/<userId>/interview/profile/snapshots/`；本 Skill 只生成事件内容，不直接写 Drive。
-
-## 按姓名解析用户
-
-每次新对话都重新解析身份，不沿用上一段对话的身份：
-
-1. 先取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "system"`、`eventType: "system.user-registered"`，payload 为 `{displayName: "<姓名>"}`。注册阶段按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表。
-3. 命中唯一用户时返回已有 `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，不自动合并、不静默挑选。
-4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才允许读取会话摘要或会话详情。
-5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：解析与注册由 `submit_event` 在一次调用内完成。本轮绑定只在当前对话有效；用户切换身份时重新按姓名解析。
-
-身份解析回执没有 `identity` 时暂停后续读取与写入；`deliveryState: "pending"` 只表示注册事件仍在 SQLite 排队，不得自行猜测 `userId`。
+先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话用 user.resolve 核对服务器凭据绑定的姓名，返回 userId/displayName 后才读取个人记录。禁止自动注册或按姓名切换账户，技能不直接访问 Google Drive、D1、R2 或云端 HTTP。身份解析失败时保留当前内容，不绕过解析继续读取历史。
 
 ## 会话读取与复盘
 
@@ -35,7 +22,7 @@ description: Use when reviewing a mock or real interview for a user resolved by 
 
 ## 唯一提交与本地输出
 
-构造完整 `interview.review.completed` JSON 后只调用一次 `submit_event`。按回执 `deliveryState` 记录本地状态：`cloud_accepted` 表示 SQLite 已落盘且 D1 Outbox 已接收，保存 `outboxReceipt`，但 `persistence.drive` 仍为 `pending`；`pending` 表示仅确认 SQLite 持久排队。`persistenceStatus` 只能是 `cloud_accepted` 或 `pending`。不得将任一状态解释为 Drive 已完成，也不得由 Skill 绕过 Outbox 手工重发；QStash/Worker 负责异步投递和画像重建重试。
+构造完整 `interview.review.completed` JSON 后只调用一次 `submit_event`。按 V2 运行契约保存实际 receipt 并报告处理阶段，不按 V1 deliveryState 字段判断。
 
 本地复盘文件统一保存为：
 

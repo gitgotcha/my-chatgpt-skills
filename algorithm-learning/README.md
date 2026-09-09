@@ -53,7 +53,7 @@ users/<userId>/algorithm/
 └── plans/daily/
 ```
 
-`cloud_accepted` 只表示本地 SQLite 已落盘且 D1 已接收任务；`pending` 表示事件仍安全保存在本机等待重试。两种状态都不等于 Drive 已完成。
+V2：pending 表示本机排队；d1_committed 表示云端账本接收；投影和 Drive 归档通过 event.status 分别核验。遵守 references/rds-v2-runtime.md，不再使用 V1 cloud_accepted 回执。
 
 ## 身份与边界
 

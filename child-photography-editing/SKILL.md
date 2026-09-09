@@ -61,3 +61,7 @@ description: Use when children's photographs need developer-reference style lear
 ## 执行纪律
 
 先规划蒙版与安全区，再调用编辑后端；文字和贴纸无法避让人物时减少或取消。首张通过 QA 的结果成为批次锚点；失败结果进入 `rejected/`，不得进入 `edited/`，不得更新锚点。使用 `scripts/` 中的确定性校验器生成 Style Profile、Edit Plan、提示词和 manifest；分析脚本只读图像元数据，不改写照片。
+
+## RDS V2 接入
+
+所有跨会话偏好使用 [RDS V2 运行契约](references/rds-v2-runtime.md)。仅在用户明确要求保存偏好时，核对身份，使用 profile/child-photography-editing 记录文字偏好与明确反馈；照片、人物特征和图像文件不进入 RDS。当前参考样本仍优先于历史风格。普通修图无需创建画像或调用云端。

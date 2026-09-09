@@ -5,22 +5,8 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 # Java 后端模拟面试
 
-本 Skill 负责按姓名解析用户、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、整场复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。唯一工具 `submit_event` 先把事件写入本机 SQLite Outbox，再由 Worker `/v1/jobs` 接收入 D1 Outbox 并异步写 Drive。
 
-所有云端数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。模拟会话事件由 Worker 追加到 `users/<userId>/interview/events/`；本 Skill 不生成画像快照，也不在会话中更新画像。
-
-## 按姓名解析用户
-
-每次新对话都必须重新解析身份，不能沿用上一段对话的内存状态：
-
-1. 先暂存用户请求，再取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "system"`、`eventType: "system.user-registered"`，payload 为 `{displayName: "<姓名>"}`。注册阶段按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表。
-3. 命中唯一用户时返回已有 `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，不自动合并、不静默挑选。
-4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才允许读取历史会话或开始提交面试事件。
-5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：解析与注册由 `submit_event` 在一次调用内完成。
-6. 同一对话后续请求沿用绑定身份，除非用户明确要求切换用户；切换时解除绑定并重新按姓名解析。
-
-身份解析或注册失败时，保留当前对话内容，不声称已保存，也不绕过解析继续读取历史。
+先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话用 user.resolve 核对服务器凭据绑定的姓名，返回 userId/displayName 后才读取个人记录。禁止自动注册或按姓名切换账户，技能不直接访问 Google Drive、D1、R2 或云端 HTTP。身份解析失败时保留当前内容，不绕过解析继续读取历史。
 
 ## 面试执行
 
@@ -46,7 +32,7 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 会话事件必须包含 `eventId`、`eventKey`、身份、时间、`status: "review_pending"`、`resumeContext` 以及题目数组。题目数组内保存原问题、原回答、追问和时间线，因此不再创建或上传独立 transcript 文件。
 
-只调用一次 `submit_event(interview.session.completed)`。按回执 `deliveryState` 写本地副本元数据：`cloud_accepted` 表示 SQLite 已落盘且 D1 Outbox 已接收，保存 `outboxReceipt`，但 `persistence.drive` 仍是 `pending`；`pending` 表示仅确认 SQLite 持久排队。对应的 `persistenceStatus` 只能是 `cloud_accepted` 或 `pending`。两者都不得伪称 Drive 已保存，也不由 Skill 手工重发；QStash/Worker 负责异步投递和重试。
+只调用一次 `submit_event(interview.session.completed)`。按 V2 运行契约报告本机排队、D1 接收、投影和归档。保存实际 receipt，不能从初始回执推断 Drive 已完成。
 
 本地文件统一写入：
 

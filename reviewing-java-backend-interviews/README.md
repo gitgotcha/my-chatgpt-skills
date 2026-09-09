@@ -47,7 +47,7 @@ outputs/interview/<userId>/interview-<sessionId>-report.json
 outputs/interview/<userId>/interview-<sessionId>-report.docx
 ```
 
-JSON 先生成，Word 以该 JSON 为唯一输入。Word 生成失败不会回滚已提交事件或删除 JSON。`cloud_accepted` 与 `pending` 都不代表 Drive 已完成。
+V2：pending 表示本机排队；d1_committed 表示云端账本接收；投影和 Drive 归档通过 event.status 分别核验。遵守 references/rds-v2-runtime.md，不再使用 V1 cloud_accepted 回执。
 
 ## 开发者入口
 

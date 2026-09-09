@@ -102,10 +102,10 @@
       ],
       "properties": {
         "tool": { "const": "submit_event" },
-        "capabilitiesEvent": { "const": "system.capabilities.read" },
-        "identityResolveEvent": { "const": "system.user.resolve" },
-        "identityRegisterEvent": { "const": "system.user-registered" },
-        "profileReadEvent": { "const": "profile.snapshot.read" },
+        "capabilitiesEvent": { "const": "capabilities" },
+        "identityResolveEvent": { "const": "user.resolve" },
+        "identityRegisterEvent": { "const": "admin_only" },
+        "profileReadEvent": { "const": "projection.read" },
         "evidenceWriteEvent": { "const": "profile.evidence.recorded" },
         "directDriveAccess": { "const": false }
       }

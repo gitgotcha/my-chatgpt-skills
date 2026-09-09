@@ -14,84 +14,51 @@ Read exactly one workflow before responding:
 
 ## Persistence contract
 
-All cloud persistence uses only the `reliable-drive-sync` MCP tool
-`submit_event`. No skill, script or scheduled task writes to Drive directly.
-Every call is a schema-1.2 envelope:
+All cross-session identity, profile reads and business-event writes use the one
+`reliable-drive-sync` MCP tool, `submit_event`. Skills never access Drive, D1,
+R2 or remote HTTP directly and never construct storage paths.
 
-```json
-{
-  "schemaVersion": "1.2",
-  "namespace": "system | algorithm | interview | resume-knowledge | profile",
-  "eventType": "system.user-registered | algorithm.learning.completed | ...",
-  "identity": { "username": "乔炳源" },
-  "payload": {},
-  "requestId": "<non-empty request id>"
-}
-```
+RDS V2 callers first send `{"storageVersion":2,"operation":"capabilities"}`
+and then `user.resolve` to verify the display name against the account bound to
+the server credential. They must not register or switch users. Personalized
+reads use `projection.read`, keep one `revision` across every page and restart
+pagination after `cursor_expired` or `projection_changed`. A missing or building
+projection is not evidence of zero mastery.
 
-## Persistence paths (Phase 1)
+Business writes keep the existing schema-1.2 envelope and immutable
+`requestId`, `eventId`, `eventKey` and content. New facts first enter the V2
+SQLite Outbox, then `/v2/events` commits them to D1; Queue consumers update
+projections and archive to Drive asynchronously. Receipts have separate stages:
 
-There are two persistence paths and they do not migrate into each other:
+- local `pending` confirms only local durable queuing;
+- `d1_committed` confirms D1 accepted the event;
+- `projected` confirms the relevant projection applied it;
+- `archived` confirms that event reached Drive.
 
-1. Existing Skill-owned events (`algorithm`, `interview`, `resume-knowledge`
-   namespaces) keep their current per-Skill contracts, output paths and
-   reducers. Phase 1 does not migrate them, and legacy data rules below stay
-   unchanged.
-2. The new generic profile path uses the external `reliable-drive-sync` MCP
-   with the `profile` namespace. A generated profile-aware Skill first calls
-   `system.capabilities.read` for capability negotiation, then
-   `system.user.resolve` for identity; profile reads use
-   `profile.snapshot.read` and evidence writes use
-   `profile.evidence.recorded` (registration still uses the existing
-   `system.user-registered` event). Generic-profile acknowledgements use the
-   asynchronous `pending` / `cloud_accepted` receipt semantics and carry no
-   immediate Drive `fileId` promise: `pending` means the local outbox has the
-   event, `cloud_accepted` means the cloud outbox accepted it while Drive
-   synchronizes in the background.
+Use `event.status` with exactly one original request or event ID to check those
+later stages. Never infer projection or Drive completion from D1 acceptance,
+never create polling events, and never change identifiers to hide a conflict.
+Generic learning evidence uses `profile.evidence.recorded`; record only explicit
+answers, completion or blockers, and never upload source repositories, private
+files or identifiable child-photo content by default.
 
-`cloud-mcp/` remains a frozen legacy compatibility copy kept for its existing
-tests; it must not receive `profile.*` events and is not the profile runtime.
+`algorithm-learning`, `software-project-learning`,
+`child-photography-editing`, `conducting-java-backend-mock-interviews`,
+`profile-aware-skill-creator` and `reviewing-java-backend-interviews` follow the
+shared `references/rds-v2-runtime.md` contract. The profile domain for project
+learning remains `backend-project-learning` to preserve continuity across the
+skill rename.
 
-## Identity rules
+## V1 compatibility
 
-Identity is global and resolved by name. The Worker applies NFKC normalization
-and trims surrounding whitespace, then resolves or registers one stable `userId`
-in the global registry. The same name always returns the same `userId` across
-every domain, and different names stay isolated. A conflict that cannot be
-resolved must stop instead of guessing.
-
-Callers pass a display name; they never pick a `userId`. Registration may be
-submitted explicitly through `system.user-registered` or triggered implicitly by
-the resolution phase of any business event. Every cloud write lands below the
-single canonical root:
-
-```text
-DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/events/
-DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/profile/snapshots/
-```
-
-The local stdio MCP exposes exactly one tool, `submit_event`; removed candidate
-and artifact tools are not supported. Every write is staged in the local SQLite
-Outbox, accepted through Worker `/v1/jobs` into the D1 Outbox, and delivered
-asynchronously by QStash/Worker. `deliveryState: "cloud_accepted"` means D1
-accepted a durable job, not that Drive finished; `deliveryState: "pending"`
-means SQLite still holds the event for retry. Skills must never require a Drive
-file ID, claim Drive completion from either receipt, or bypass the Outboxes.
-
-Local portable outputs are not profile inputs:
-
-```text
-outputs/interview/<userId>/interview-<sessionId>-session.json
-outputs/interview/<userId>/interview-<sessionId>-report.json
-outputs/interview/<userId>/interview-<sessionId>-report.docx
-```
-
-The Word report is derived from the local report JSON and is never uploaded.
-
-## Legacy data and migration
-
-Pre-normalization namespace directories are read-only. They are reached only by
-the compatibility reader and the migration implementation, and migration is only
-offered as a `system.legacy-migration-requested` dry-run plus an explicitly
-approved execute. Legacy objects are never moved, overwritten or deleted, and no
-migration runs automatically.
+`java-knowledge-based-on-resume-learn-skill`, the repository's embedded V1
+Worker/MCP implementation and historical migration material remain unchanged
+until separately migrated. `cloud-mcp/` is frozen compatibility code. Legacy
+V1 namespaces include `system`, `algorithm`, `interview` and `resume-knowledge`;
+V1 uses NFKC name normalization and `system.user-registered` to bind `userId`.
+These legacy registration rules do not apply to V2 credential-bound callers.
+The business event `algorithm.learning.completed` remains unchanged.
+data is read-only; `system.legacy-migration-requested` still requires a dry-run
+and explicit approval. Local interview JSON and Word files under
+`outputs/interview/<userId>/` are portable outputs, not profile inputs and are
+never uploaded automatically.

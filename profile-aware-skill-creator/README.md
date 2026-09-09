@@ -44,25 +44,25 @@ tests/test_profile_contract.py
 
 契约必须定义可观察证据、画像维度、reducer 与 snapshot，不能把模型主观印象直接保存为画像。
 
-运行时使用**外部 Reliable Drive Sync 部署提供的通用 `profile` 路径**；仓库内置的 Worker/MCP 只支持既有 Skill-owned 事件，不能替代这条通用运行时：
+运行时使用当前插件绑定的 RDS V2 通用 `profile` 域，遵守 references/rds-v2-runtime.md：
 
 ```text
-system.capabilities.read
+capabilities
         ↓
-system.user.resolve
+user.resolve（凭据绑定身份）
         ↓
-identity_not_found 时询问用户是否注册
+身份失败时停止画像功能，交管理员配置
         ↓
-明确同意后 system.user-registered
+普通 Skill 不调用注册操作
         ↓
-稍后再次 system.user.resolve 验证身份
+管理员配置后再次 user.resolve 验证
         ↓
-profile.snapshot.read
+projection.read（namespace=profile，projectionName=domain）
         ↓
 满足 recordWhen 时至多一次 profile.evidence.recorded
 ```
 
-这些操作都经外部 Reliable Drive Sync 的 `submit_event` 入口。`system.capabilities.read`、`system.user.resolve` 和 `profile.snapshot.read` 是只读操作，不进入 Outbox；注册与 evidence 写入使用异步 `pending` / `cloud_accepted` 回执。能力协商失败、身份未解析或用户未同意时必须对画像功能 fail closed，但普通业务任务继续；Skill 不直接创建 Profile 文件，也不把既有 `algorithm`、`interview` 或 `resume-knowledge` 数据迁移到通用路径。
+所有操作经插件 `submit_event` 入口。原生只读 DTO 使用 storageVersion=2，不进入 Outbox；业务写使用 schemaVersion=1.2 envelope。pending 仅表示本地排队，d1_committed 表示云端账本已接收，投影与归档另查 event.status。身份或能力校验失败时停止画像功能，普通业务继续；不直接写 Drive，也不迁移 V1 数据。
 
 ## 验证
 
