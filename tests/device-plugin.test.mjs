@@ -21,6 +21,16 @@ test("T08 approved inventory is explicit and contains the account gateway plus f
   assert.match(inventory, /packageHash/i);
 });
 
+test("T08 active specification does not reintroduce the retired review routing skill", async () => {
+  const spec = await readFile(join(root, "docs", "superpowers", "specs", "2026-09-08-unified-submit-event-device-binding-design.md"), "utf8");
+  const plan = await readFile(join(root, "docs", "superpowers", "plans", "2026-09-08-unified-submit-event-device-binding-implementation.md"), "utf8");
+  const currentInventoryLine = spec.match(/^当前本机插件版本.*$/m)?.[0] ?? "";
+  const t08Line = plan.match(/^[-*] \[ \] 最小实现：.*$/m)?.[0] ?? "";
+  assert.doesNotMatch(currentInventoryLine, /review-model-routing/);
+  assert.doesNotMatch(t08Line, /review-model-routing/);
+  assert.match(spec, /旧计划.*独立工具.*失效/);
+});
+
 test("T08 account gateway skill has no domain reducer or profile schema dependency", async () => {
   const skill = await readFile(join(root, "account-gateway", "SKILL.md"), "utf8");
   assert.match(skill, /submit_event/);

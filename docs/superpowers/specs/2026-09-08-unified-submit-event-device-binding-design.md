@@ -28,7 +28,7 @@ My Chatgpt Skills 对 Agent 只公开一个 MCP 工具 submit_event，内部区�
 
 2026-09-08 只读核对：MCP 仓库基线 4f81009；stdio-bridge.mjs 已有单一 submit_event、V2 operation 查询和 schemaVersion=1.2 业务 envelope，但凭据仍来自进程级 options.token。账户表 name_key 仍唯一，管理员初始化仍按姓名复用账户，不能直接暴露为自助注册。
 
-当前本机插件版本 1.0.0+codex.20260908132546，目录包含 algorithm-learning、child-photography-editing、conducting-java-backend-mock-interviews、java-knowledge-based-on-resume-learn-skill、profile-aware-skill-creator、review-model-routing、reviewing-java-backend-interviews、software-project-learning。目录存在不代表每项均被宿主发现；打包需同时核验清单与工具发现。执行前重新盘点，不恢复已替换的 backend-project-learning 名称，也不误删新增 review-model-routing。
+当前发行输入以 `docs/releases/device-plugin-inventory.md` 为准，包含 account-gateway、algorithm-learning、backend-project-learning、conducting-java-backend-mock-interviews、reviewing-java-backend-interviews、java-knowledge-based-on-resume-learn-skill、software-project-learning。机器缓存中可能保留历史目录，但目录存在不代表它属于当前发行包；打包需同时核验清单与工具发现。执行前重新盘点，不恢复已替换的 backend-project-learning 名称，也不把已移除的旧路由技能重新纳入发行输入。
 
 ## 4. 模块与信任边界
 
@@ -152,7 +152,7 @@ Outbox 冻结原账户 UUID、原始业务 envelope 与幂等标识；后台投�
 
 账户网关技能只负责指导调用 submit_event 的 account.* 操作。它不依赖领域名、业务payload schema、画像表结构或reducer，不接收整份画像作为身份校验输入。统一运行时以操作注册表分发，各领域继续维护自身契约。
 
-所有个人画像技能使用 current 回执取得 bindingContext，携带它调用原查询/写入操作。普通无个人数据功能可继续使用。review-model-routing 等不需要用户画像的技能不增加登录依赖。发布前按当前Git与安装源盘点，不固定旧技能名称或数量；新生成的画像技能引用同一授权契约。
+所有个人画像技能使用 current 回执取得 bindingContext，携带它调用原查询/写入操作。普通无个人数据功能可继续使用，不增加登录依赖。发布前按当前 Git 与安装源盘点，不固定旧技能名称或数量；新生成的画像技能引用同一授权契约。
 
 安装包只公开 submit_event；不新增 account_gateway 工具。运行时固定版本与包hash，不引用个人Windows路径或浮动main。第一版Windows安全存储，不支持平台明确拒绝持久授权，不明文降级。升级保留已验证绑定；升级工具schema后新会话加载，旧客户端无bindingContext的个人操作稳定拒绝。
 

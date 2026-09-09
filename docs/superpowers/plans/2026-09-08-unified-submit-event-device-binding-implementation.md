@@ -824,7 +824,7 @@ review:
 assert.deepEqual(packagedNames, approvedInventory); assert.equal(exposedTools.length,1);
 ```
 - [ ] 在S运行 `node --test tests/device-plugin.test.mjs`，预期目标断言失败；记录原始输出，排除语法/夹具原因。
-- [ ] 最小实现：盘点当前安装8目录（含software-project-learning/review-model-routing）与Git源码，逐项记录保留/替换及来源SHA/文件hash。新增网关技能只讲account.*，不引用画像内容或领域schema。实际画像技能共同引用bindingContext契约，非画像技能不要求登录；profile-aware生成器同步验证器/模板/测试。构建脚本从已提交源产生插件清单/.mcp.json/runtime，不改市场文件手工路径；便携启动依赖T00真实证据。runtime精确版本/hash，不含凭据、Outbox或个人绝对路径；新Windows用户安装取消注册零副作用。
+- [ ] 最小实现：按 `docs/releases/device-plugin-inventory.md` 盘点当前发行输入与 Git 源码，逐项记录保留/替换及来源 SHA/文件 hash；机器缓存中的历史目录不得自动纳入发行包。新增网关技能只讲 account.*，不引用画像内容或领域 schema。实际画像技能共同引用 bindingContext 契约，非画像技能不要求登录；profile-aware 生成器同步验证器/模板/测试。构建脚本从已提交源产生插件清单/.mcp.json/runtime，不改市场文件手工路径；便携启动依赖 T00 真实证据。runtime 精确版本/hash，不含凭据、Outbox 或个人绝对路径；新 Windows 用户安装取消注册零副作用。
 - [ ] 核心实现约束：
 ```text
 inventory -> trackedSource -> pinnedRuntimeHash -> package -> freshWindowsValidation
@@ -1092,4 +1092,3 @@ B01=T01/T07；B02=T00/T05/T09；B03=T05；B04=T01/T05/T06；B05=T05；B06=T06/T0
 规格§1–6=T01/T05/T07；§7–8=T00/T05/T06；§9=T06/T07；§10=T02/T03/T05；§11=T02/T04/T06；§12=T08；§13=T09；§14=T10/T11。所有旧审核门无效，本文件21门均pending：9项critical前后审，2项deep与1项standard后审。没有light任务，不为了成本把认证/迁移降级。
 
 下一步可在当前会话按executing-plans逐任务执行，或用户明确授权后选择分任务代理。第一步为T00 PRE及本机协调验证，不再探测可信聊天ID。不进入代码直到执行授权。
-
