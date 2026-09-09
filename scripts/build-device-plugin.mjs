@@ -34,8 +34,9 @@ const manifest = {
   manifestVersion: 1,
   sourceCommit,
   runtime: { bridgeProtocol: "submit_event", storageVersion: 2 },
+  defaults: { selfRegister: false, adminInit: false },
   entries,
-  packageHash: sha(canonical({ manifestVersion: 1, sourceCommit, runtime: { bridgeProtocol: "submit_event", storageVersion: 2 }, entries }))
+  packageHash: sha(canonical({ manifestVersion: 1, sourceCommit, runtime: { bridgeProtocol: "submit_event", storageVersion: 2 }, defaults: { selfRegister: false, adminInit: false }, entries }))
 };
 const output = join(root, "dist");
 await mkdir(output, { recursive: true });

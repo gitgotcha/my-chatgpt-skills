@@ -33,3 +33,11 @@ test("T08 build script emits a deterministic manifest without credentials or abs
   assert.doesNotMatch(script, /C:\\\\Users\\\\/i);
 });
 
+test("T10 release candidate keeps registration and admin initialization disabled by default", async () => {
+  const script = await readFile(join(root, "scripts", "build-device-plugin.mjs"), "utf8");
+  const runbook = await readFile(join(root, "docs", "releases", "device-release.md"), "utf8");
+  assert.match(script, /selfRegister:\s*false/);
+  assert.match(script, /adminInit:\s*false/);
+  assert.match(runbook, /默认.*关闭|false/i);
+  assert.match(runbook, /备份|回退/);
+});
