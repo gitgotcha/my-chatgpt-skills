@@ -20,9 +20,9 @@ description: "Drill Java backend interview knowledge strictly grounded in the us
 
 ## 身份与持久化
 
-1. 每次会话先取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用唯一 MCP 工具 `submit_event`，由 Worker 按标准化姓名解析或注册稳定的全局 `userId`。姓名与已有 `userId` 不一致时以 Worker 返回的 `identity_mismatch` 为准并停止。
-3. 所有云端写入只经 `submit_event`。本技能不接触 Google Drive；Worker 是唯一写入者，写入失败时停止，不回退到旧目录。
+1. 每次会话先调用唯一 MCP 工具 `submit_event` 的 `account.current`，只有 `state:"authenticated"` 才能读取简历画像或提交个人事件。
+2. 保存回执中的完整 `bindingContext`，后续查询与写入都携带它；姓名和 UUID 只作一致性字段，不作为凭据。
+3. 所有云端写入只经 `submit_event`。本技能不接触 Google Drive；Worker 是唯一写入者，绑定变化、核验不可用或凭据失效时停止，不自动换账户。
 4. 定时任务由用户自行创建。本技能不得创建、修改或管理定时任务；每日模板只描述用户已有的调用入口。
 
 ## 证据分级

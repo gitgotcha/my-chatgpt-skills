@@ -17,9 +17,11 @@ Every call is a schema-1.2 envelope:
 ```json
 {
   "schemaVersion": "1.2",
+  "operation": "account.current | account.register | account.find | ... | business.write",
+  "bindingContext": { "userId": "<uuid>", "bindingRevision": "<opaque>", "principal": "<opaque>" },
   "namespace": "system | algorithm | interview | resume-knowledge",
-  "eventType": "system.user-registered | algorithm.learning.completed | ...",
-  "identity": { "username": "乔炳源" },
+  "eventType": "algorithm.learning.completed | interview.session.completed | ...",
+  "identity": { "username": "乔炳源", "userId": "<uuid>" },
   "payload": {},
   "requestId": "<non-empty request id>"
 }
@@ -27,29 +29,27 @@ Every call is a schema-1.2 envelope:
 
 ## Identity rules
 
-Identity is global and resolved by name. The Worker applies NFKC normalization
-and trims surrounding whitespace, then resolves or registers one stable `userId`
-in the global registry. The same name always returns the same `userId` across
-every domain, and different names stay isolated. A conflict that cannot be
-resolved must stop instead of guessing.
+姓名不是认证。默认身份来自当前 Windows 用户的本机设备绑定；Worker 每次个人请求仍以凭据派生
+`userId` 并校验账户状态、绑定修订号和请求中的一致性字段。Agent 只能复用最近一次
+`account.current` 返回的完整 `bindingContext`，不能凭聊天姓名、UUID 或记忆恢复授权。
 
-Callers pass a display name; they never pick a `userId`. Registration may be
-submitted explicitly through `system.user-registered` or triggered implicitly by
-the resolution phase of any business event. Every cloud write lands below the
-single canonical root:
+新账户与设备迁移必须走 `account.register`/`account.transfer.*` 的专用流程；账户管理状态不伪装成学习事件。
+用户明确要求切换时才执行 `account.switch`/`account.unbind`，遇到绑定变化或凭据失效立即停止个人读写并重新获取
+current。每个账户可有独立 UUID，同名账户不自动合并，也不提供按姓名接管。
+
+Every cloud write lands below the single canonical root:
 
 ```text
 DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/events/
 DriveRoot/my-chatGPT-skills/users/<userId>/<domain>/profile/snapshots/
 ```
 
-The Worker exposes exactly one public tool, `submit_event`; removed candidate and
-artifact tools are not supported. New records are append-only JSON in a Google
-Shared Drive. A successful write is reported only after Drive readback returns a
-real file ID. `status: "ok"` means the event and any requested projection
-completed; `cloud_persistence_pending` means the local copy exists but the cloud
-event did not; `profile_cache_pending` means the event is durable but rebuilding
-the snapshot failed. Never claim persistence after an error.
+The Worker exposes exactly one public tool, `submit_event`; account management,
+read-only queries, and business writes are operation variants behind the same
+gateway. New records are append-only JSON in a Google Shared Drive. A successful
+write is reported only according to the returned cloud/D1/Drive receipt; an
+Outbox-local acknowledgement is not a Drive sync claim. Never claim persistence
+after an error or a pending receipt.
 
 Local portable outputs are not profile inputs:
 

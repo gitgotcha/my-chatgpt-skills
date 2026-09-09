@@ -7,15 +7,15 @@
 用户在自己的任务配置中设定每天 09:00（`Asia/Shanghai`）执行：
 
 ```text
-使用 java-knowledge-based-on-resume-learn-skill，
-为<姓名>生成今天的简历八股练习。
+使用 java-knowledge-based-on-resume-learn-skill，先通过 `submit_event(account.current)` 核验当前设备账户，
+为当前已授权用户生成今天的简历八股练习。
 ```
 
 自然日由调用时的时区确定，任务应显式提供时区。未指定时区时，技能必须先询问，不得猜测。
 
 ## 技能执行步骤
 
-1. 按姓名调用 `submit_event` 解析或注册用户，取得 `userId`。
+1. 调用 `submit_event(account.current)` 取得 authenticated 状态与完整 `bindingContext`，后续请求必须携带该上下文。
 2. 检查有效简历快照与题库；无简历时停止并提示上传。
 3. 检查当日题单是否已存在。
 4. 已存在则原样返回，不重新随机生成。

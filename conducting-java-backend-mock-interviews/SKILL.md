@@ -5,22 +5,20 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 # Java 后端模拟面试
 
-本 Skill 负责按姓名解析用户、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、整场复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。云端持久化只通过 MCP 暴露的唯一工具 `submit_event` 完成。
+本 Skill 负责设备账户授权、逐题模拟、原始问答证据整理和会话事件交接；不做最终评分、整场复盘或画像更新。它不直接访问 Google Drive、D1、R2 或云端 HTTP。云端持久化只通过 MCP 暴露的唯一工具 `submit_event` 完成。
 
 所有云端数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。模拟会话事件由 Worker 追加到 `users/<userId>/interview/events/`；本 Skill 不生成画像快照，也不在会话中更新画像。
 
-## 按姓名解析用户
+## V2 设备账户授权
 
-每次新对话都必须重新解析身份，不能沿用上一段对话的内存状态：
+每次新对话先查询设备绑定状态，不能把姓名或聊天记忆当作凭据：
 
-1. 先暂存用户请求，再取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用 `submit_event`，发送 `schemaVersion: "1.2"`、`namespace: "system"`、`eventType: "system.user-registered"`，payload 为 `{displayName: "<姓名>"}`。注册阶段按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表。
-3. 命中唯一用户时返回已有 `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，不自动合并、不静默挑选。
-4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才允许读取历史会话或开始提交面试事件。
-5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：解析与注册由 `submit_event` 在一次调用内完成。
-6. 同一对话后续请求沿用绑定身份，除非用户明确要求切换用户；切换时解除绑定并重新按姓名解析。
+1. 调用 `submit_event` 的 `account.current`；只有 `state:"authenticated"` 与完整 `bindingContext` 都有效时，才读取历史或开始面试。
+2. 个人会话事件携带最近一次上下文；账户切换仅响应用户明确的 `account.switch`/`account.unbind` 请求。
+3. 遇到 `binding_changed`、`reauth_required` 或 `verification_unavailable`，停止个人操作并重新查询 current。
+4. 新账户使用 `account.register`，秘密和配对码只在安全界面处理。
 
-身份解析或注册失败时，保留当前对话内容，不声称已保存，也不绕过解析继续读取历史。
+账户授权失败时，保留当前对话内容，不声称已保存，也不绕过授权继续读取历史。
 
 ## 面试执行
 
@@ -46,7 +44,7 @@ description: Use when conducting a Java backend mock interview for a user resolv
 
 会话事件必须包含 `eventId`、`eventKey`、身份、时间、`status: "review_pending"`、`resumeContext` 以及题目数组。题目数组内保存原问题、原回答、追问和时间线，因此不再创建或上传独立 transcript 文件。
 
-只调用一次 `submit_event(interview.session.completed)`。Worker 把事件追加到 `my-chatGPT-skills/users/<userId>/interview/events/`，不创建画像快照。成功回执用于本地副本元数据；云端失败时仍写本地副本，并把 `persistenceStatus` 标为 `cloud_persistence_pending`，不得伪称云端已保存。
+只调用一次 `submit_event(interview.session.completed)`，并携带当前 `bindingContext`。Worker 把事件追加到 `my-chatGPT-skills/users/<userId>/interview/events/`，不创建画像快照。成功回执用于本地副本元数据；云端失败时仍写本地副本，并如实标记待处理，不得伪称云端已保存。
 
 本地文件统一写入：
 
@@ -54,4 +52,4 @@ description: Use when conducting a Java backend mock interview for a user resolv
 outputs/interview/<userId>/interview-<sessionId>-session.json
 ```
 
-本地 JSON 是可移植副本，不是画像快照来源，也不会被拼入任何云端事件路径。之后将 `sessionId` 和 `review_pending` 状态交给复盘 Skill；复盘 Skill 会在新的对话中再次按姓名解析同一用户。
+本地 JSON 是可移植副本，不是画像快照来源，也不会被拼入任何云端事件路径。之后将 `sessionId` 和 `review_pending` 状态交给复盘 Skill；复盘 Skill 也必须通过 `account.current` 获取上下文。

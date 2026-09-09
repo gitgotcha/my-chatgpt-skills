@@ -6,7 +6,7 @@
 
 ## 复盘顺序
 
-1. 按姓名解析用户，取得 `{userId, username}` 绑定。
+1. 调用 `submit_event(account.current)`，取得 authenticated 状态与完整 `bindingContext`；姓名和 UUID 仅作一致性字段。
 2. 读取目标会话与已有复盘版本，构造唯一 `interview.review.completed` 事件。
 3. 只调用一次 `submit_event`；Worker 追加事件到 `users/<userId>/interview/events/`。
 4. Worker 物化快照到 `users/<userId>/interview/profile/snapshots/`；本 Skill 不创建快照。

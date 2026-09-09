@@ -36,7 +36,7 @@ users/<userId>/algorithm/plans/daily/
 
 下列旧文件保留作为只读兼容数据，禁止再写入：旧 namespace 级注册索引、JSONL 事件日志，以及旧快照目录下的历史快照文件。任何新建 JSON 均重复 `schemaVersion`、`userId`、`username`；读回时还必须校验文件父目录。
 
-## 注册记录与身份锁
+## 服务端账户与设备授权
 
 `user-registry/registration-<userId>.json` 是全局注册表中唯一允许读取的跨用户数据，只含：
 
@@ -50,7 +50,7 @@ users/<userId>/algorithm/plans/daily/
 }
 ```
 
-注册成功后才读取对应 `identity.json`。姓名只做机械标准化（Unicode NFKC 与去除首尾空白）：命中唯一用户时复用其 `userId`；不存在时创建稳定独立的新 `userId`；存在无法消解的同名冲突时停止并要求人工选择，不可覆盖或静默选择。
+旧的按姓名注册文件仅作只读兼容记录。V2 运行时先通过 `submit_event(account.current)` 核验当前 Windows 用户的设备绑定，服务端凭据派生真实 `userId`；个人读写必须携带完整 `bindingContext`，不能依据聊天姓名猜测账户。
 
 新建 `identity.json` 使用 `schemaVersion: "1.2"`。为迁移既有档案，可只读校验 `1.0` 或 `1.1` 身份锁的 `userId`、`username` 与父目录，并使用新的 1.2 注册、事件和快照文件；不得为迁移覆盖旧身份锁。
 
@@ -103,7 +103,7 @@ users/<userId>/algorithm/plans/daily/
 
 ## 写入、恢复与状态
 
-1. 调用 `submit_event` 时先按姓名解析或注册用户，锁定 `userId` 与规范化 `username`。
+1. 调用 `submit_event(account.current)` 取得 authenticated 状态、服务端 `userId` 与完整 `bindingContext`；注册或切换只能走账户网关操作。
 2. 列出、校验并按 `eventKey` 去重全部事件。
 3. 若没有同键事件，创建唯一事件文件并读回。事件未读回时返回 `cloud_persistence_pending`，不得称已记录。
 4. 事件已读回后，Worker 从完整事件集创建唯一快照；快照读回成功才可称“已同步画像”。

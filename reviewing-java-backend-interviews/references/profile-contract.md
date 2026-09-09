@@ -1,6 +1,6 @@
 # 共享画像协议
 
-协议版本为 `schemaVersion: "1.2"`，Schema 位于 `schemas/contracts.schema.json`。唯一活动主键是全局 `userId`，它由 `submit_event` 按姓名从 `user-registry/` 解析或创建。旧的候选人索引、候选人目录与候选人锁模型已废弃，只允许出现在 legacy 适配器或带 archived/superseded 标记的历史文档中。
+协议版本为 `schemaVersion: "1.2"`，Schema 位于 `schemas/contracts.schema.json`。唯一活动主键是服务端凭据派生的全局 `userId`；个人请求先经 `submit_event(account.current)` 取得并携带完整 `bindingContext`。姓名只作显示或一致性字段，不是认证，也不用于接管账户。旧的候选人索引、候选人目录与候选人锁模型已废弃，只允许出现在 legacy 适配器或带 archived/superseded 标记的历史文档中。
 
 ## 画像的唯一实现方
 

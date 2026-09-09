@@ -34,28 +34,24 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 所有算法数据只写入唯一规范插件根 `DriveRoot/my-chatGPT-skills/`。本领域的事件、快照与每日题单分别位于 `users/<userId>/algorithm/events/`、`users/<userId>/algorithm/profile/snapshots/` 和 `users/<userId>/algorithm/plans/daily/`；写入失败时停止，不回退到旧目录。
 
-### 按姓名解析用户
+### V2 设备账户授权
 
-1. 新算法对话先暂存用户请求，再取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用唯一 MCP 工具 `submit_event`，发送 `schemaVersion:"1.2"`、`namespace:"system"`、
-   `eventType:"system.user-registered"`，payload 为 `{displayName}`，由注册阶段完成按姓名的解析与注册。
-3. Worker 只按机械标准化（Unicode NFKC 与去除首尾空白）后的姓名匹配全局注册表：命中唯一用户时返回已有
-   `userId`；不存在时创建稳定独立的新 `userId` 并返回；存在无法消解的同名冲突时停止并要求人工选择，
-   不自动合并、不静默挑选。
-4. `submit_event` 响应返回规范化的 `identity`（`username` 与 `userId`）。把它绑定到当前对话后，才处理暂存的请求。
-5. 不再展示候选用户列表让用户选择，也不再单独调用身份列举、校验或创建接口：注册与解析都由 `submit_event`
-   在一次调用内完成。
-6. 同一对话后续请求沿用绑定身份，除非用户明确要求切换用户；切换时解除绑定并重新按姓名解析。
+1. 新算法对话先调用唯一 MCP 工具 `submit_event` 的 `account.current`。
+2. 只有返回 `state:"authenticated"` 才能读取个人画像或提交个人学习事件；保存完整 `bindingContext`。
+3. 后续个人请求把该上下文作为顶层字段传入，不能把姓名或 UUID 当作凭据，也不能自行构造 UUID。
+4. 用户明确要求切换时才调用 `account.switch`/`account.unbind`；遇到 `binding_changed`、`reauth_required` 或
+   `verification_unavailable` 立即停止个人操作并重新查询 current，不自动换人。
+5. 新账户使用 `account.register`，秘密和配对码只由安全界面处理，不进入聊天、事件或日志。
 
 ### 追加式学习记录
 
 1. 答疑完成后构造完整的 schema-1.2 学习事件，并调用唯一 MCP 工具 `submit_event`：
-   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，顶层 `identity` 为
-   `{username}`，可附带上一步返回的 `userId`，payload 仅为 `{event}`。事件本身必须包含匹配的 `username`、
+   `namespace:"algorithm"`、`eventType:"algorithm.learning.completed"`，顶层 `bindingContext` 使用最近一次
+   `account.current` 回执，`identity`/事件身份只作一致性字段，payload 仅为 `{event}`。事件本身必须包含匹配的 `username`、
    UUID `eventId`、`eventKey`（使用 `<userId>:algorithm-learning:<problem-slug>:<ISO-8601>`）和明确的学习证据。
 2. 只记录明确错误、未掌握、完成或用户主动打卡的事实；没有掌握度证据时使用 `consulted`。每次请求生成新的事件文件，不覆盖旧记录。
 3. Worker 负责把事件追加到规范目录、按 `eventKey` 去重，并从全部已验证事件重建算法画像快照；Skill 不直接读写 Drive。
-4. `submit_event` 返回 `status:"ok"` 和真实 Drive `receipt.fileId` 后才可称“学习事件已保存”；任何错误都应说明“尚未持久化”，并停止本轮后续写入。
+4. `submit_event` 返回云端接收回执后才可称“事件已被云端接收”；Drive 归档、投影或本机 Outbox 状态必须按回执逐层说明，任何错误都应说明“尚未完成对应持久化”，并停止本轮后续写入。
    若返回 `cloud_persistence_pending`，表示本地事件已生成但云端事件尚未持久化；若返回
    `profile_cache_pending`，表示事件已经持久化，但画像快照生成失败。两种状态都必须如实告知，
    不得把待处理状态称为“已完成”。同一幂等键重试时只补做缺失的投影，不重复追加事件。
@@ -67,6 +63,6 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 - 是否真正定位到用户代码的问题，并保持最小修改？
 - 是否按请求控制答案揭示程度、使用用户语言且保证代码可提交？
-- 是否已通过姓名解析拿到已注册用户的 `userId`，并以事件记录明确证据？
+- 是否已通过 `account.current` 获得 authenticated 状态与完整 `bindingContext`，并以请求回执明确证据？
 - 事件是否已返回 Drive 文件 ID？
 - 复杂度、反例、替代方案与剪枝是否真实适用且说明正确性？

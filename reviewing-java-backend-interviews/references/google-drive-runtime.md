@@ -34,8 +34,8 @@ DriveRoot/my-chatGPT-skills/
 
 ## 提交与校验
 
-1. 先按姓名解析用户，取得规范化的 `{userId, username}` 绑定。
-2. 构造唯一 `interview.review.completed` 事件，只调用一次 `submit_event`。
+1. 先调用 `submit_event(account.current)`，取得 authenticated 状态与完整 `bindingContext`。
+2. 构造唯一 `interview.review.completed` 事件并携带该上下文，只调用一次 `submit_event`。
 3. Worker 追加事件、读回校验父目录与内容，再物化快照。
 4. 响应包含真实回执时标记 `persistenceStatus: "ok"`；整体写入失败标记 `cloud_persistence_pending`；事件已保存但快照失败标记 `profile_cache_pending`。
 

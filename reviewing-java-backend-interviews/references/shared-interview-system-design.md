@@ -2,13 +2,13 @@
 
 ## 目标与边界
 
-两个 Skill 共同实现按姓名解析的多轮面试闭环。`conducting-java-backend-mock-interviews` 负责按姓名解析、模拟出题和原始问答固化；`reviewing-java-backend-interviews` 是唯一的统一复盘、本地 DOCX 报告和确定性画像事件生成方。真实用户资料不进入本仓库；测试只使用虚构数据和临时目录。
+两个 Skill 共同实现经设备账户授权的多轮面试闭环。`conducting-java-backend-mock-interviews` 负责在 `account.current` 成功后模拟出题和原始问答固化；`reviewing-java-backend-interviews` 是唯一的统一复盘、本地 DOCX 报告和确定性画像事件生成方。真实用户资料不进入本仓库；测试只使用虚构账户和临时目录。
 
-系统的唯一主键是全局 `userId`，由 `submit_event` 按姓名解析或创建。旧的候选人索引、候选人目录与候选人锁已废弃，也不再要求二次确认候选人身份。同名冲突无法消解时停止并要求人工选择，不自动合并。
+系统的唯一主键是服务端凭据派生的全局 `userId`。`submit_event(account.current)` 返回的 `bindingContext` 是个人操作的授权上下文；姓名不是认证，同名账户保持独立，不按姓名接管或自动合并。
 
 ## 运行时与交接
 
-两个 Skill 都不直接调用 Google Drive。它们只构造 schema-1.2 事件并调用唯一暴露的 `submit_event`；Worker 负责校验、解析用户、追加事件和物化快照。
+两个 Skill 都不直接调用 Google Drive。它们只构造 schema-1.2 事件并调用唯一暴露的 `submit_event`；Worker 负责校验凭据与上下文、追加事件和物化快照。
 
 模拟 Skill 固化 `MOCK-*` 会话事件并置为 `review_pending`，会话内不生成画像快照。reviewing 消费该不可变会话，产生统一 Review、本地报告和画像变化事件。真实面试由 reviewing 直接接收 `REAL-*` 会话：默认生成 Review、报告和待确认的画像变化预览，只有用户确认才应用事件；模拟 Review 的已校验事件自动应用。
 
@@ -35,7 +35,7 @@ Worker 只使用已验证且 `applyProfileChanges === true` 的复盘事件，�
 
 两类 Review 采用同一逐题评价结构，包含原问题、原回答、正确性/完整性、遗漏与归因、口语化更优回答、完整参考答案、追问关联、优势/薄弱项/建议和画像变化。报告包含姓名、`userId`、类型、领域、时间、`sessionId`、复盘版本与画像变化摘要。
 
-本地测试使用临时目录覆盖姓名解析、按用户隔离、schema 校验、本地副本路径、报告渲染与旧结构拒绝。报告生成后必须渲染为页面图像，检查中文字体、表格、标题、分页和长文本。云端冒烟只在实际 Drive 连接器可用且用户确认根目录时，使用隔离的虚构用户执行；否则标记未验证。
+本地测试使用临时目录覆盖设备账户授权、按用户隔离、schema 校验、本地副本路径、报告渲染与旧结构拒绝。报告生成后必须渲染为页面图像，检查中文字体、表格、标题、分页和长文本。云端冒烟只在实际 Drive 连接器可用且用户确认根目录时，使用隔离的测试设备账户执行；否则标记未验证。
 
 ## 文件布局
 
@@ -46,7 +46,7 @@ outputs/interview/<userId>/interview-<sessionId>-report.json
 outputs/interview/<userId>/interview-<sessionId>-report.docx
 ```
 
-`reviewing` 保有 `schemas/`、`scripts/interview_core.py`、`scripts/create_review_report.py` 与测试；`conducting` 保有相同的 Schema 副本、会话固化/交接辅助脚本和测试；不复制复盘或画像更新算法。两边的 `SKILL.md` 与协议文件统一描述按姓名解析、领域/简历决策、状态机、交接和失败处理。
+`reviewing` 保有 `schemas/`、`scripts/interview_core.py`、`scripts/create_review_report.py` 与测试；`conducting` 保有相同的 Schema 副本、会话固化/交接辅助脚本和测试；不复制复盘或画像更新算法。两边的 `SKILL.md` 与协议文件统一描述设备授权、领域/简历决策、状态机、交接和失败处理。
 
 ## 非目标
 
