@@ -9,7 +9,7 @@ const root = new URL("..", import.meta.url).pathname.replace(/^\/+/, "").replace
 const names = Object.freeze([
   "account-gateway", "algorithm-learning", "backend-project-learning",
   "conducting-java-backend-mock-interviews", "reviewing-java-backend-interviews",
-  "java-knowledge-based-on-resume-learn-skill", "software-project-learning", "review-model-routing"
+  "java-knowledge-based-on-resume-learn-skill", "software-project-learning"
 ]);
 
 function sha(value) { return createHash("sha256").update(value).digest("hex"); }

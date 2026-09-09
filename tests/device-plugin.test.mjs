@@ -11,9 +11,12 @@ test("T08 approved inventory is explicit and contains the account gateway plus f
   const inventoryPath = join(root, "docs", "releases", "device-plugin-inventory.md");
   assert.equal(existsSync(inventoryPath), true);
   const inventory = await readFile(inventoryPath, "utf8");
-  for (const name of ["account-gateway", "algorithm-learning", "backend-project-learning", "conducting-java-backend-mock-interviews", "reviewing-java-backend-interviews", "java-knowledge-based-on-resume-learn-skill", "software-project-learning", "review-model-routing"]) {
+  for (const name of ["account-gateway", "algorithm-learning", "backend-project-learning", "conducting-java-backend-mock-interviews", "reviewing-java-backend-interviews", "java-knowledge-based-on-resume-learn-skill", "software-project-learning"]) {
     assert.match(inventory, new RegExp(`^\\| ${name} \\|`, "m"));
   }
+  assert.doesNotMatch(inventory, /^\| review-model-routing \|/m);
+  const buildScript = await readFile(join(root, "scripts", "build-device-plugin.mjs"), "utf8");
+  assert.doesNotMatch(buildScript, /review-model-routing/);
   assert.match(inventory, /sourceSha|source SHA/i);
   assert.match(inventory, /packageHash/i);
 });
