@@ -3,7 +3,7 @@
 所有跨会话身份、画像和业务事件只调用唯一 MCP 工具 `submit_event`。技能不直接访问 Drive、D1、HTTP 或构造存储路径。业务 envelope 的 `schemaVersion:"1.2"` 与存储版本 2 是不同概念；不要把写事件改成 schemaVersion 2。
 
 ## 身份与查询
-V2 身份由服务器凭据绑定。姓名仅用于一致性核对，不能自动注册或切换用户。先调用：
+V2 身份由服务器凭据绑定。姓名只用于注册时生成展示身份和后续一致性核对，不能替代服务端凭据。先调用：
 
 ```json
 {"storageVersion":2,"operation":"capabilities","params":{}}
@@ -15,7 +15,13 @@ V2 身份由服务器凭据绑定。姓名仅用于一致性核对，不能自�
 {"storageVersion":2,"operation":"user.resolve","params":{"displayName":"乔炳源"}}
 ```
 
-示例姓名必须替换成用户实际姓名；返回顶层 `userId`、`displayName`，绑定为 `{userId,username:displayName}`。姓名不匹配、凭据失效时停止个人数据读写；保留普通答疑能力。不要提交 `system.user-registered`；账户由管理员初始化并安全配置凭据。凭据不得进入消息、事件、日志或技能文件。
+示例姓名必须替换成用户实际姓名。若设备已绑定账户，调用 `user.resolve` 核对返回的 `userId/displayName`；未绑定且用户明确要求使用个人功能时，先通过同一 `submit_event` 调用账户网关自助注册：
+
+```json
+{"storageVersion":2,"operation":"account.register","params":{"displayName":"实际姓名","requestId":"新UUID"}}
+```
+
+网关在本机生成并安全保存高熵凭据，只把一次 Bearer 证明发给 Worker；返回 `userId/displayName`，设备未绑定时自动绑定，已有绑定时返回 `created_not_selected`，绝不抢占当前账户。注册后以返回的 `userId` 和 `displayName` 建立本次上下文；用户明确要求切换时才调用 `account.switch`。不要提交 `system.user-registered`，不要把凭据放进消息、事件、日志或技能文件。
 
 读取物化画像：
 ```json

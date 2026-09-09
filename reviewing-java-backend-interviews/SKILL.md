@@ -6,7 +6,7 @@ description: Use when reviewing a mock or real interview for a user resolved by 
 # Java 后端面试复盘
 
 
-先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话用 user.resolve 核对服务器凭据绑定的姓名，返回 userId/displayName 后才读取个人记录。禁止自动注册或按姓名切换账户，技能不直接访问 Google Drive、D1、R2 或云端 HTTP。身份解析失败时保留当前内容，不绕过解析继续读取历史。
+先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话先检查设备绑定。未绑定且用户明确要求个人功能时，通过 `account.register` 自助注册并使用网关返回的 userId/displayName；已绑定账户不得按姓名自动切换，只有用户明确要求时才切换。技能不直接访问 Google Drive、D1、R2 或云端 HTTP。身份解析失败时保留当前内容，不绕过解析继续读取历史。
 
 ## 会话读取与复盘
 
