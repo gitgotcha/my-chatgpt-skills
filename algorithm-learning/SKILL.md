@@ -32,7 +32,7 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
 
-所有持久化遵守 [RDS V2 运行契约](references/rds-v2-runtime.md)，唯一远端工具是 `submit_event`；先核对凭据绑定身份，再读取 algorithm/learning。首次只读调用不会注册用户或创建 Outbox。
+所有持久化遵守 [RDS V2 运行契约](references/rds-v2-runtime.md)，唯一远端工具是 `submit_event`；Skill 不直接读写 Drive，先核对凭据绑定身份，再读取 algorithm/learning。首次只读调用不会注册用户或创建 Outbox。
 
 ### 学习记录
 答疑后仅提交有证据的 `algorithm.learning.completed`。事件使用已有 schema-1.2 字段，详见 [算法字段契约](references/algorithm-profile-contract.md)。没有掌握度证据时记录中性的 `consulted`；不要推断弱点或评分。已提交事实保持 requestId/eventId/eventKey 不变，等待本机队列投递。
