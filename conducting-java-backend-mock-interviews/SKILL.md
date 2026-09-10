@@ -6,7 +6,7 @@ description: Use when conducting a Java backend mock interview for a user resolv
 # Java 后端模拟面试
 
 
-先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话先检查设备绑定。未绑定且用户明确要求个人功能时，通过 `account.register` 自助注册并使用网关返回的 userId/displayName；已绑定账户不得按姓名自动切换，只有用户明确要求时才切换。技能不直接访问 Google Drive、D1、R2 或云端 HTTP。身份解析失败时保留当前内容，不绕过解析继续读取历史。
+先读 [RDS V2 运行契约](references/rds-v2-runtime.md)。唯一远端工具为 submit_event；新对话先检查设备绑定。未绑定且用户明确要求个人功能时，通过 `account.register` 自助注册并使用网关返回的 userId/displayName；已绑定账户不得按姓名自动切换，只有用户明确要求时才切换。技能不直接访问 Google Drive、D1、R2 或云端 HTTP。账户授权失败时保留当前内容，不绕过授权继续读取历史。
 
 ## 面试执行
 
