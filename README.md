@@ -2,7 +2,7 @@
 
 # My ChatGPT Skills
 
-> RDS V2 同步状态：本分支接入本地插件的 V2 身份、分页画像和分阶段回执契约，详见各技能的 `references/rds-v2-runtime.md`。下文 RDS 存储章节仍描述仓库内置 V1 运行时；V2 以 `AGENTS.md` 和上述运行契约为准。本次同步尚有旧契约测试及辅助脚本需要适配，PR 在回归通过前保持草稿。
+> RDS V2 同步状态：本仓库已接入本地插件的 V2 身份、分页画像、账户自助注册和分阶段回执契约，详见各技能的 `references/rds-v2-runtime.md`。所有需要长期画像的技能统一通过网关的 `submit_event`，由本地设备绑定凭据后访问对应用户数据；D1 接收与 Drive 异步归档状态分开报告。
 
 一个面向个人长期使用场景构建的 **ChatGPT / Codex / WorkBuddy Skill 集合**。
 
