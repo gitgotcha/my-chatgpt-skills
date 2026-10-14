@@ -27,6 +27,7 @@ class UnifiedSkillContractTest(unittest.TestCase):
         for relative in (
             "references/standard-mode.md",
             "references/interview-mode.md",
+            "references/detailed-lesson-format.md",
             "references/project-modeling.md",
             "references/source-tracing.md",
             "references/reliability-review.md",
