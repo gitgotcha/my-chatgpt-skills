@@ -17,7 +17,7 @@ description: Use when a learner wants to understand a software project, source c
 
 项目学习模式读取 [项目学习与回答评判](references/standard-mode.md)。专业面试模式读取 [专业面试训练](references/interview-mode.md)。不要同时加载两份模式参考。
 
-做完整单元或长主链路讲解时读取[详细单元讲解格式](references/detailed-lesson-format.md)；这是输出格式指引，不占下方专业技术参考的名额。再按当前问题读取至多一份专业参考：首次梳理项目、表或组件关系时读取 [项目建模](references/project-modeling.md)；追踪真实代码、文件行号或教学注释时读取 [源码追踪](references/source-tracing.md)；分析事务、幂等、并发、异步、性能或优化时读取 [可靠性与优化审查](references/reliability-review.md)。跨越多个主题时先处理当前问题，后续再加载下一份。
+做完整单元或长主链路讲解时读取[详细单元讲解格式](references/detailed-lesson-format.md)；用户要求完整范例或维护本 Skill 时，再读取[单元二完整示范对话](references/examples/unit-2-complete-dialogue.md)。范例是完整的输入/输出实例；迁移到其他项目时只借鉴教学动作，所有技术事实、源码、路径和行号都必须从目标项目重新核实。这些是输出指引，不占下方专业技术参考的名额。再按当前问题读取至多一份专业参考：首次梳理项目、表或组件关系时读取 [项目建模](references/project-modeling.md)；追踪真实代码、文件行号或教学注释时读取 [源码追踪](references/source-tracing.md)；分析事务、幂等、并发、异步、性能或优化时读取 [可靠性与优化审查](references/reliability-review.md)。跨越多个主题时先处理当前问题，后续再加载下一份。
 
 ## 建立证据边界
 

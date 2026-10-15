@@ -28,6 +28,7 @@ class UnifiedSkillContractTest(unittest.TestCase):
             "references/standard-mode.md",
             "references/interview-mode.md",
             "references/detailed-lesson-format.md",
+            "references/examples/unit-2-complete-dialogue.md",
             "references/project-modeling.md",
             "references/source-tracing.md",
             "references/reliability-review.md",
@@ -37,6 +38,16 @@ class UnifiedSkillContractTest(unittest.TestCase):
                 resource = SKILL_ROOT / relative
                 self.assertTrue(resource.is_file(), relative)
                 self.assertTrue(resource.read_text(encoding="utf-8").strip(), relative)
+
+    def test_complete_unit_example_preserves_dialogue_and_transfer_boundary(self) -> None:
+        example = (SKILL_ROOT / "references/examples/unit-2-complete-dialogue.md").read_text(encoding="utf-8")
+        self.assertIn("## 完整输入与输出", example)
+        self.assertIn("## 跨项目使用边界", example)
+        self.assertIn("**学习者输入**", example)
+        self.assertIn("**教练输出**", example)
+        self.assertEqual(example.count("**学习者输入**"), 14)
+        self.assertEqual(example.count("**教练输出**"), 14)
+        self.assertIn("进入任何新项目，都要重新读取该仓库", example)
 
     def test_retired_duplicate_packages_are_absent(self) -> None:
         self.assertFalse((REPO_ROOT / "backend-project-learning").exists())
