@@ -57,7 +57,8 @@ V1 namespaces include `system`, `algorithm`, `interview` and `resume-knowledge`;
 V1 uses NFKC name normalization and `system.user-registered` to bind `userId`.
 These legacy registration rules do not apply to V2 credential-bound callers.
 The business event `algorithm.learning.completed` remains unchanged.
-data is read-only; `system.legacy-migration-requested` still requires a dry-run
-and explicit approval. Local interview JSON and Word files under
+Legacy data is read-only; `system.legacy-migration-requested` still requires a dry-run
+and explicit approval. See [RDS V1/V2 compatibility and cleanup boundaries](docs/rds-v1-v2-compatibility.md)
+before changing legacy reads, migrations or stored data. Local interview JSON and Word files under
 `outputs/interview/<userId>/` are portable outputs, not profile inputs and are
 never uploaded automatically.
