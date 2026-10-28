@@ -10,66 +10,33 @@
 - 想专项学习动态规划、回溯、树、图、滑动窗口、二分或剪枝。
 - 想记录完成情况，生成后续每日练习。
 
-## 工作方式
+## 长期学习快照
 
-用户提供代码时，Skill 会沿用原编程语言，并按以下顺序处理：
-
-```text
-理解现有思路
-  ↓
-判断核心路线
-  ↓
-定位编译 / 运行时 / 逻辑 / 边界 / 性能问题
-  ↓
-给出小反例与最小修改
-  ↓
-必要时补充推荐实现与复习点
-```
-
-用户只要提示时，答案会按“题型方向 → 核心观察 → 状态或数据结构 → 伪代码 → 局部代码 → 完整实现”逐层揭示。
-
-## 长期算法画像
-
-每次学习完成后，Skill 只根据明确证据记录一条追加式事件。明确完成、错误、未掌握或主动打卡会进入事件；证据不足时只记录中性的 `consulted`，不会臆测弱点。
-
-写入链路为：
+每次学习完成后，只根据明确证据向 JSON 快照追加记录。明确完成、错误、未掌握或主动打卡会保留；证据不足时用中性的 `consulted`，不臆测弱点。跨会话链路通过 `rds` MCP 读取与更新 `knowledge/algorithm-learning/学习快照.json`。
 
 ```mermaid
-flowchart LR
-    A["algorithm.learning.completed"] --> B["submit_event"]
-    B --> C["SQLite Outbox"]
-    C --> D["Worker /v1/jobs"]
-    D --> E["D1 Outbox"]
-    E --> F["QStash / Worker"]
-    F --> G["Google Drive"]
+sequenceDiagram
+    participant S as Algorithm Skill
+    participant M as RDS-JBryon MCP
+    participant O as Local Outbox
+    participant W as RDS-JBryon Worker
+    participant D as JSON Snapshot
+    S->>M: query/read and request/patch
+    M->>O: persist request before send
+    O->>W: send request with revision
+    W->>D: merge and project accepted change
+    W-->>M: authoritative status
+    M-->>S: projected, pending, or conflict
 ```
 
-规范目录：
+只有状态查询返回 `projected` 才表示快照已经可读。完整规则见 [RDS-JBryon 合同](../references/rds-jbryon-runtime.md) 与 [算法学习快照字段](./references/algorithm-profile-contract.md)。
 
-```text
-users/<userId>/algorithm/
-├── events/
-├── profile/snapshots/
-└── plans/daily/
-```
+## 工作方式
 
-V2：pending 表示本机排队；d1_committed 表示云端账本接收；投影和 Drive 归档通过 event.status 分别核验。遵守 references/rds-v2-runtime.md，不再使用 V1 cloud_accepted 回执。
+用户提供代码时，Skill 会沿用原编程语言，并按理解现有思路、判断路线、定位错误、构造反例、给出最小修改、补充复杂度与复习点的顺序分析。用户只要提示时，答案会按“题型方向 → 核心观察 → 状态或数据结构 → 伪代码 → 局部代码 → 完整实现”逐层揭示。
 
-## 身份与边界
-
-新对话先按姓名通过 `submit_event` 解析或注册全局用户，业务 Skill 不自行创建 `userId`。本 Skill 负责算法学习，不承担 Java 八股、正式模拟面试或面试复盘。
-
-## 开发者入口
-
-- Agent 行为规范：[SKILL.md](./SKILL.md)
-- 画像与事件契约：[references/algorithm-profile-contract.md](./references/algorithm-profile-contract.md)
-- 每日练习协议：[references/algorithm-daily-protocol.md](./references/algorithm-daily-protocol.md)
-- 专项检查表：[references/special-topic-checklists.md](./references/special-topic-checklists.md)
-
-从仓库根目录运行契约测试：
+## 开发者验证
 
 ```bash
 python -m unittest discover -s algorithm-learning/tests -p "test_*.py"
 ```
-
-真正决定 Agent 行为、事件字段和保存语义的是 `SKILL.md` 与对应 contract；本 README 仅提供面向人的入口。

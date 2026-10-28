@@ -2,7 +2,7 @@
 
 > **Archived / superseded; paths below are historical and MUST NOT be used for writes.**
 >
-> 该计划描述的 `candidate_id`、CandidateIndex、`candidates/<candidate_id>/`、`profile/current_profile.json` 与原始 transcript/报告云端上传均已废弃。当前契约以 [shared-interview-system-design.md](shared-interview-system-design.md)、[profile-contract.md](profile-contract.md) 和 [google-drive-runtime.md](google-drive-runtime.md) 为准：按姓名解析全局 `userId`，事件与快照位于 `DriveRoot/my-chatGPT-skills/users/<userId>/interview/`，所有云端写入只经 `submit_event`。
+> **历史归档，不可执行（2026-10-28）：** 本计划中的候选人身份、UUID 用户、Drive 路径与事件写入均已退役。当前唯一运行规则是仓库根目录的 [RDS-JBryon runtime contract](../../references/rds-jbryon-runtime.md)：单用户、用户可读路由、`rds` MCP 与 JSON 快照。本文仅留作历史决策记录，不得作为 Skill 或实现指令。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

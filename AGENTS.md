@@ -13,52 +13,30 @@ Read exactly one workflow before responding:
 
 ## Persistence contract
 
-All cross-session identity, profile reads and business-event writes use the one
-`reliable-drive-sync` MCP tool, `submit_event`. Skills never access Drive, D1,
-R2 or remote HTTP directly and never construct storage paths.
+RDS-JBryon is the only active persistence service. It is single-user for
+乔炳源; Skills do not resolve, register, or switch accounts. All reads and
+writes go through the `rds` MCP tool using readable paths such as
+`project/12306` and `knowledge/java/jvm`. The shared contract is
+[`references/rds-jbryon-runtime.md`](references/rds-jbryon-runtime.md).
 
-RDS V2 callers first send `{"storageVersion":2,"operation":"capabilities"}`
-and then `user.resolve` to verify the display name against the account bound to
-the server credential. They must not register or switch users. Personalized
-reads use `projection.read`, keep one `revision` across every page and restart
-pagination after `cursor_expired` or `projection_changed`. A missing or building
-projection is not evidence of zero mastery.
+Skills never call Drive, D1, R2, remote HTTP, or retired MCP tools directly.
+Users provide readable paths, not UUIDs, node IDs, workspace epochs, or request
+IDs. Before creating a new top-level domain or ambiguous path, show the complete
+proposed path and get confirmation; an explicit request to create that path is
+confirmation. Keep each Skill's existing evidence and privacy boundaries.
 
-Business writes keep the existing schema-1.2 envelope and immutable
-`requestId`, `eventId`, `eventKey` and content. New facts first enter the V2
-SQLite Outbox, then `/v2/events` commits them to D1; Queue consumers update
-projections and archive to Drive asynchronously. Receipts have separate stages:
+For reads, walk the route from the root with `kind=query` and `directory.list`,
+passing each returned `nodeId` as the next `parentId`; match full path segments
+exactly and finish pagination before choosing a node. Do not use
+`directory.resolve` for missing paths. Then read the snapshot and current
+revision. For writes, use `kind=request` with the current
+workspace epoch, a new request ID, and the smallest patch against the observed
+revision. Reuse the exact same request ID and content for an uncertain retry.
+Only an authoritative `projected` status proves that the snapshot is readable;
+local queuing or database acceptance is not a completed save. Preserve both
+sides of a same-field conflict and ask the user to choose. The exact tool
+contract, request shape, and failure behavior live in the shared reference.
 
-- local `pending` confirms only local durable queuing;
-- `d1_committed` confirms D1 accepted the event;
-- `projected` confirms the relevant projection applied it;
-- `archived` confirms that event reached Drive.
-
-Use `event.status` with exactly one original request or event ID to check those
-later stages. Never infer projection or Drive completion from D1 acceptance,
-never create polling events, and never change identifiers to hide a conflict.
-Generic learning evidence uses `profile.evidence.recorded`; record only explicit
-answers, completion or blockers, and never upload source repositories, private
-files or identifiable child-photo content by default.
-
-`algorithm-learning`, `software-project-learning`,
-`child-photography-editing`, `conducting-java-backend-mock-interviews`,
-`profile-aware-skill-creator` and `reviewing-java-backend-interviews` follow the
-shared `references/rds-v2-runtime.md` contract. The profile domain for project
-learning remains `backend-project-learning` to preserve continuity across the
-skill rename.
-
-## V1 compatibility
-
-`java-knowledge-based-on-resume-learn-skill`, the repository's embedded V1
-Worker/MCP implementation and historical migration material remain unchanged
-until separately migrated. `cloud-mcp/` is frozen compatibility code. Legacy
-V1 namespaces include `system`, `algorithm`, `interview` and `resume-knowledge`;
-V1 uses NFKC name normalization and `system.user-registered` to bind `userId`.
-These legacy registration rules do not apply to V2 credential-bound callers.
-The business event `algorithm.learning.completed` remains unchanged.
-Legacy data is read-only; `system.legacy-migration-requested` still requires a dry-run
-and explicit approval. See [RDS V1/V2 compatibility and cleanup boundaries](docs/rds-v1-v2-compatibility.md)
-before changing legacy reads, migrations or stored data. Local interview JSON and Word files under
-`outputs/interview/<userId>/` are portable outputs, not profile inputs and are
-never uploaded automatically.
+Historical V1/RDS-V2 plans and reports are non-executable records only. They
+must not be linked by active Skills as runtime instructions. No old Worker,
+shared database, queue, or legacy MCP remains an active persistence route.

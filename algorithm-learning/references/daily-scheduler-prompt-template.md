@@ -1,11 +1,6 @@
 # 独立每日任务模板
 
-身份输入：
-
-```text
-username: <USERNAME>
-timezone: Asia/Shanghai
-```
+固定时区：Asia/Shanghai。不要求姓名或账户信息。
 
 计划：
 
@@ -16,4 +11,4 @@ RRULE:FREQ=DAILY
 END:VEVENT
 ```
 
-运行提示词：使用 `algorithm-learning` Skill 的每日练习协议，为 `<USERNAME>` 生成今天的算法练习。按姓名调用 `submit_event` 解析或注册用户，只提交 `algorithm.daily-plan-created` 等事件；事件先进入 SQLite 与 D1 Outbox，再由 Worker 异步写入规范目录 `users/<userId>/algorithm/`。不要使用聊天上下文，不要读取或写入其他用户目录，也不要自行读写云端文件。回执为 `cloud_accepted` 时只报告“已进入云端队列”，为 `pending` 时报告“已在本机排队”，不得宣称 Drive 或画像已同步。
+运行提示词：使用 algorithm-learning Skill 的每日练习协议，从 knowledge/algorithm-learning/学习快照.json 读取今天的练习历史；按 Asia/Shanghai 生成题单。跨会话读取与保存只通过 rds MCP；没有读取到快照时如实说明，不推断掌握度。用户反馈后追加事实，不覆盖已有题单或原答案。

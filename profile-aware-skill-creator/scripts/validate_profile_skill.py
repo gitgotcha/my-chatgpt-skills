@@ -32,26 +32,22 @@ MODES = ("plain", "profile")
 # official allow-list so officially-illegal fields (e.g. ``interface``) fail.
 OFFICIAL_FRONTMATTER_FIELDS = {"name", "description", "license", "allowed-tools", "metadata"}
 
-# Generated profile contract tests must cover these four runtime behaviors.
+# Generated snapshot contract tests must cover these four runtime behaviors.
 # The validator requires each behavior to appear (by an unambiguous token) in
 # the test source and requires the tests to actually execute and pass.
 CONTRACT_MIN_TESTS = 4
 CONTRACT_BEHAVIORS = (
-    ("capabilities preflight and fail-closed", (
-        "system.capabilities.read", "capabilities.read", "capabilities read",
-        "fail-closed", "fail closed", "unsupported", "preflight",
+    ("capability and route preflight with fail-closed behavior", (
+        "rds", "directory.resolve", "fail-closed", "fail closed", "unsupported", "preflight",
     )),
-    ("user consent before profile mutation", (
-        "system.user.resolve", "user.resolve", "consent", "user-registered",
-        "user_registered", "register", "explicit",
+    ("explicit confirmation for a new or ambiguous route", (
+        "route confirmation", "explicit confirmation", "confirm the path", "user confirmation",
     )),
-    ("immutable, read-only evidence", (
-        "profile.evidence.recorded", "evidence.recorded", "profile.snapshot.read",
-        "snapshot.read", "immutable", "append-only", "overwrite",
+    ("snapshot read and minimal revision-based patch", (
+        "snapshot.read", "snapshot.patch", "baserevision", "minimal patch",
     )),
-    ("full scan and preservation of existing files", (
-        "full file scan", "full-file-scan", "byte-for-byte", "preserve",
-        "preservation", "existing", "inventory", "scan",
+    ("preservation of original evidence and existing state", (
+        "original answer", "originalanswer", "preserve", "append", "existing snapshot",
     )),
 )
 # Default: execute generated contract tests as part of profile validation.
@@ -61,12 +57,11 @@ SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$")
 RESERVED_DOMAINS = ("algorithm", "interview", "resume-knowledge", "system", "profile")
 
 RUNTIME_OPERATIONS = {
-    "tool": "submit_event",
-    "capabilitiesEvent": "capabilities",
-    "identityResolveEvent": "user.resolve",
-    "identityRegisterEvent": "admin_only",
-    "profileReadEvent": "projection.read",
-    "evidenceWriteEvent": "profile.evidence.recorded",
+    "tool": "rds",
+    "readOperation": "snapshot.read",
+    "writeOperation": "snapshot.patch",
+    "routePolicy": "user-readable-path",
+    "accountIdentityResolution": False,
     "directDriveAccess": False,
 }
 PLATFORMS = ["codex", "chatgpt", "claude", "workbuddy"]
@@ -84,13 +79,7 @@ PROFILE_ONLY_PATHS = (
     "schemas/profile-capability.json",
     "tests/test_profile_contract.py",
 )
-PROFILE_EVENT_TYPES = (
-    "system.capabilities.read",
-    "system.user.resolve",
-    "system.user-registered",
-    "profile.snapshot.read",
-    "profile.evidence.recorded",
-)
+PROFILE_EVENT_TYPES = ("snapshot.read", "snapshot.patch", "directory.resolve")
 
 SCAFFOLD_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -308,25 +297,32 @@ def _validate_capability(document: object, skill_name: str, rel: str, errors: li
 
     # Validate top-level fields (only allowed ones)
     allowed_top_fields = {
-        "schemaVersion", "domain", "sourceSkill", "dimensions",
+        "schemaVersion", "domain", "route", "sourceSkill", "dimensions",
         "evidencePolicy", "runtime", "portability",
     }
     for key in document:
         if key not in allowed_top_fields:
             errors.append(f"{rel}: unknown top-level field {key!r}; allowed fields: {sorted(allowed_top_fields)}")
 
-    expected_top = ["schemaVersion", "domain", "sourceSkill", "dimensions",
+    expected_top = ["schemaVersion", "domain", "route", "sourceSkill", "dimensions",
                     "evidencePolicy", "runtime", "portability"]
     for key in expected_top:
         if key not in document:
             errors.append(f"{rel}: missing required field {key!r}")
-    if document.get("schemaVersion") != "1.0":
-        errors.append(f"{rel}: schemaVersion must be the constant \"1.0\"")
+    if document.get("schemaVersion") != "1.1":
+        errors.append(f"{rel}: schemaVersion must be the constant \"1.1\"")
     domain = document.get("domain")
     if not isinstance(domain, str) or not SAFE_ID.match(domain):
         errors.append(f"{rel}: domain must match the safe-identifier pattern")
     elif domain in RESERVED_DOMAINS:
         errors.append(f"{rel}: domain {domain!r} is reserved for existing implementations")
+    route = document.get("route")
+    if (not isinstance(route, list) or not 2 <= len(route) <= 8
+            or not all(isinstance(segment, str) and 0 < len(segment) <= 128
+                       and "/" not in segment and "\\" not in segment
+                       and not any(ord(char) < 32 for char in segment)
+                       for segment in route)):
+        errors.append(f"{rel}: route must contain 2-8 readable path segments without separators or control characters")
     source_skill = document.get("sourceSkill")
     if source_skill != skill_name:
         errors.append(f"{rel}: sourceSkill must equal the Skill folder name {skill_name!r}")

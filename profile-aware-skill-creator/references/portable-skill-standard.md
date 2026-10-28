@@ -83,6 +83,7 @@ Validation failures are fixed in the generated files, never silenced.
   is omitted entirely.
 
 Platform-specific tool-call syntax may differ, but any JSON envelope passed to
-`submit_event` must be identical across Codex, ChatGPT, Claude, and
+`rds` MCP snapshot behavior must be consistent across supported platforms, and
 WorkBuddy. Distributable Skill files contain no personal absolute paths, home
 directories, or Drive identifiers.
+

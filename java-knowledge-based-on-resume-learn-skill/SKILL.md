@@ -18,12 +18,11 @@ description: "Drill Java backend interview knowledge strictly grounded in the us
 | 每日练习 | “生成今天的练习” | 读取或生成当日固定题单，只返回题面 |
 | 掌握度查看 | “我的掌握度怎么样” | 展示覆盖率、低分项、近期问题与下一轮优先内容 |
 
-## 身份与持久化
+## 单用户快照与持久化
 
-1. 每次会话先取得用户姓名；姓名缺失时先询问，不得猜测或用占位姓名提交。
-2. 调用唯一 MCP 工具 `submit_event`，由 Worker 按标准化姓名解析或注册稳定的全局 `userId`。姓名与已有 `userId` 不一致时以 Worker 返回的 `identity_mismatch` 为准并停止。
-3. 所有写入只经 `submit_event`：本地 MCP 先写 SQLite Outbox，Worker `/v1/jobs` 再接收入 D1 Outbox，QStash/Worker 最后异步写 Google Drive。本技能不接触 Drive，也不回退到旧目录。
-4. 只按回执 `deliveryState` 报告保存状态：`cloud_accepted` 表示 SQLite 已落盘且 D1 Outbox 已接收，但 `persistence.drive` 仍为 `pending`；`pending` 表示仅确认 SQLite 持久排队。前者可称“已进入云端队列”，后者称“已在本机排队”，两者都不得称“Drive 已保存”，也不由 Skill 手工重发。
+1. 按 [RDS-JBryon 运行契约](../references/rds-jbryon-runtime.md) 通过唯一工具 `rds` 读取 `knowledge/java/resume-interview/学习快照.json`，不解析账户或要求用户提供 UUID。
+2. 快照不存在时，先向用户说明拟建路径并确认；用户明确提出该路径时视为确认。仅保存明确回答、题目掌握记录和用户确认的简历知识，不上传简历原文件。
+3. 每次写入前读取当前 revision 并提交最小 patch；只有状态查询返回 `projected` 才报告已保存。相同请求重试复用原 requestId；冲突时保留双方并询问用户。
 5. 定时任务由用户自行创建。本技能不得创建、修改或管理定时任务；每日模板只描述用户已有的调用入口。
 
 ## 证据分级
@@ -50,7 +49,7 @@ description: "Drill Java backend interview knowledge strictly grounded in the us
 
 ## 掌握度与每日一次计分
 
-题目掌握度采用 `0.6 * 本次得分 + 0.4 * 原掌握度`（首次直接等于本次得分）；知识点掌握度取该知识点下已考题目的平均值，未考题不计入平均值但计入覆盖率。同一用户、同一自然日、同一 `questionKey` 只接受当天第一次回答计分；当天再次回答仍给完整反馈，但不提交事件、不更新画像。规则见 [references/profile-storage-contract.md](references/profile-storage-contract.md)。
+题目掌握度采用 `0.6 * 本次得分 + 0.4 * 原掌握度`（首次直接等于本次得分）；知识点掌握度取该知识点下已考题目的平均值，未考题不计入平均值但计入覆盖率。乔炳源的同一自然日内，同一 `questionKey` 只接受当天第一次回答计分；当天再次回答仍给完整反馈，但不重复写入、不更新掌握度。规则见 [references/profile-storage-contract.md](references/profile-storage-contract.md)。
 
 ## 边界
 

@@ -5,170 +5,74 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCES = ROOT / "references"
-
-# Historical design documents are the only files allowed to describe the
-# pre-normalisation layout, and only while they carry a superseded banner.
 HISTORICAL_REFERENCES = sorted(REFERENCES.glob("2026-08-11-*.md"))
-
-# Adjacent string literals keep the retired paths out of this file's own text,
-# so the repository-wide scan cannot match the checker itself.
-RETIRED_PATHS = (
-    "algorithm/user" "s/",
-    "profile/" "current",
-    "profile/" "history",
-    "practice" "/",
-)
-RETIRED_IDENTITY_GATE = r"identity\.(list|create|verify)"
 
 
 def active_documents():
-    candidates = [ROOT / "SKILL.md", ROOT / "agents" / "openai.yaml"]
+    candidates = [ROOT / "SKILL.md", ROOT / "README.md", ROOT / "agents" / "openai.yaml"]
     candidates += sorted(REFERENCES.glob("*.md"))
-    candidates += sorted((ROOT / "tests").glob("*.py"))
     historical = {path.name for path in HISTORICAL_REFERENCES}
     return [path for path in candidates if path.name not in historical]
 
 
 class AlgorithmLearningSkillContractTests(unittest.TestCase):
-    def _read(self, filename):
-        return (REFERENCES / filename).read_text(encoding="utf-8")
+    def read(self, path):
+        return path.read_text(encoding="utf-8")
 
-    def _skill(self):
-        return (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    def test_skill_uses_readable_rds_snapshot_routes(self):
+        skill = self.read(ROOT / "SKILL.md")
+        self.assertIn("rds", skill)
+        self.assertIn("knowledge/algorithm-learning/学习快照.json", skill)
+        self.assertIn("algorithm-profile-contract.md", skill)
+        self.assertNotIn("submit_event", skill)
+        self.assertNotIn("user.resolve", skill)
+        self.assertNotIn("UUID", skill)
 
-    def test_skill_resolves_identity_by_name_instead_of_listing_users(self):
-        skill = self._skill()
+    def test_snapshot_contract_keeps_evidence_neutral_and_append_only(self):
+        contract = self.read(REFERENCES / "algorithm-profile-contract.md")
         for required in (
-            "姓名",
-            "submit_event",
-            "userId",
-            "解析",
-            "注册",
+            "algorithm-learning-snapshot/1",
+            '"records"',
+            '"dailyPlans"',
+            "consulted",
+            "不得臆测弱点",
+            "RDS-JBryon",
         ):
-            self.assertIn(required, skill)
-        self.assertNotRegex(skill, RETIRED_IDENTITY_GATE)
-        for removed in ("find_or_create_candidate", "list_candidates", "submit_artifact"):
-            self.assertNotIn(removed, skill)
+            with self.subTest(required=required):
+                self.assertIn(required, contract)
+        for retired in ("userId", "submit_event", "Drive", "identityResolveEvent"):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, contract)
 
-    def test_skill_keeps_answering_rules_and_event_evidence(self):
-        skill = self._skill()
-        for required in (
-            "先诊断用户代码，再给最小修改版",
-            "渐进提示",
-            "algorithm-profile-contract.md",
-            "学习事件",
-            "algorithm.learning.completed",
-        ):
-            self.assertIn(required, skill)
+    def test_daily_protocol_preserves_plans_and_reads_the_snapshot(self):
+        protocol = self.read(REFERENCES / "algorithm-daily-protocol.md")
+        for required in ("knowledge/algorithm-learning/学习快照.json", "未完成题", "3–5", "7 天内", "不覆盖"):
+            with self.subTest(required=required):
+                self.assertIn(required, protocol)
+        self.assertNotIn("D1 Outbox", protocol)
+        self.assertNotIn("submit_event", protocol)
 
-    def test_contract_uses_canonical_plugin_root_and_global_registry(self):
-        contract = self._read("algorithm-profile-contract.md")
-        for required in (
-            "my-chatGPT-skills/",
-            "user-registry/registration-<userId>.json",
-            "users/<userId>/algorithm/events/",
-            "users/<userId>/algorithm/profile/snapshots/",
-            "users/<userId>/algorithm/plans/daily/",
-        ):
-            self.assertIn(required, contract)
-
-    def test_contract_defines_identity_event_and_snapshot_boundaries(self):
-        contract = self._read("algorithm-profile-contract.md")
-        for required in (
-            "userId",
-            "username",
-            "registration-<userId>.json",
-            "event-<eventId>.json",
-            "sourceEventKeys",
-            "不可跨用户读取",
-        ):
-            self.assertIn(required, contract)
-
-    def test_append_only_contract_requires_unique_event_and_snapshot_files(self):
-        contract = self._read("algorithm-profile-contract.md")
-        for required in (
-            "schemaVersion `1.2`",
-            "event-<eventId>.json",
-            "snapshot-<UTC>-<headEventId>.json",
-            "sourceEventKeys",
-        ):
-            self.assertIn(required, contract)
-
-    def test_worker_materializes_snapshots_from_verified_events(self):
-        contract = self._read("algorithm-profile-contract.md")
-        runtime = self._read("google-drive-runtime.md")
-        for source in (contract, runtime):
-            self.assertIn("submit_event", source)
-        self.assertIn("Worker", contract)
-        for required in (
-            "Worker",
-            "快照",
-        ):
-            self.assertIn(required, contract)
-
-    def test_append_only_contract_keeps_legacy_files_read_only(self):
-        contract = self._read("algorithm-profile-contract.md")
-        runtime = self._read("google-drive-runtime.md")
-        self.assertIn("旧文件保留作为只读兼容数据", contract)
-        self.assertIn("禁止调用任何“更新文件内容”的接口", runtime)
-
-    def test_daily_protocol_preserves_unfinished_work_and_uses_outbox_recovery(self):
-        protocol = self._read("algorithm-daily-protocol.md")
-        for required in (
-            "未完成题",
-            "3～5",
-            "不宣称已同步画像",
-            "追加式创建",
-            "submit_event",
-            "D1 Outbox",
-            "SQLite",
-            "自动恢复",
-        ):
-            self.assertIn(required, protocol)
-
-    def test_daily_protocol_writes_plans_under_the_canonical_daily_folder(self):
-        protocol = self._read("algorithm-daily-protocol.md")
-        self.assertIn("plans/daily", protocol)
-        self.assertIn("daily-plan-YYYY-MM-DD-<planId>.json", protocol)
-
-    def test_scheduler_template_only_calls_the_skill_and_submit_event(self):
-        template = self._read("daily-scheduler-prompt-template.md")
-        for required in (
-            "<USERNAME>",
-            "algorithm-learning",
-            "submit_event",
-            "Asia/Shanghai",
-            "DTSTART:20260101T090000",
-        ):
-            self.assertIn(required, template)
-        # The scheduled task must never be told to touch Drive itself.
-        self.assertNotIn("current snapshot", template)
+    def test_scheduler_template_delegates_persistence_to_the_skill(self):
+        template = self.read(REFERENCES / "daily-scheduler-prompt-template.md")
+        self.assertIn("algorithm-learning", template)
+        self.assertIn("Asia/Shanghai", template)
+        self.assertIn("rds MCP", template)
+        self.assertNotIn("submit_event", template)
         self.assertNotIn("Drive 根目录", template)
 
-    def test_outbox_statuses_distinguish_local_and_cloud_acceptance_from_drive_completion(self):
-        skill = self._skill()
-        for required in ("deliveryState", "cloud_accepted", "pending", "SQLite", "D1 Outbox"):
-            self.assertIn(required, skill)
-        self.assertNotIn("receipt.fileId", skill)
-
     def test_historical_documents_are_marked_superseded(self):
-        self.assertEqual(4, len(HISTORICAL_REFERENCES))
+        self.assertGreaterEqual(len(HISTORICAL_REFERENCES), 4)
         for path in HISTORICAL_REFERENCES:
             with self.subTest(path=path.name):
-                head = path.read_text(encoding="utf-8").splitlines()[:6]
-                banner = "\n".join(head)
+                banner = "\n".join(self.read(path).splitlines()[:6])
                 self.assertIn("Archived / superseded", banner)
                 self.assertIn("MUST NOT be used for writes", banner)
-                self.assertIn("algorithm-profile-contract.md", banner)
 
-    def test_active_files_do_not_reference_retired_paths(self):
-        identity_gate = re.compile(RETIRED_IDENTITY_GATE)
+    def test_active_documents_do_not_route_to_the_retired_service(self):
+        patterns = re.compile(r"(?:submit_event|user\.resolve|identity\.(?:list|create|verify)|rds-v2-runtime\.md|RDS V2 运行契约)")
         for path in active_documents():
-            with self.subTest(path=str(path.relative_to(ROOT))):
-                text = path.read_text(encoding="utf-8")
-                for retired in RETIRED_PATHS:
-                    self.assertNotIn(retired, text)
-                self.assertIsNone(identity_gate.search(text))
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                self.assertIsNone(patterns.search(self.read(path)))
 
 
 if __name__ == "__main__":

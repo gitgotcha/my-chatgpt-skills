@@ -1,12 +1,7 @@
-# 共享 JSON Schema
+# RDS-JBryon interview snapshot schemas
 
-此目录是 interviewing 协议的受测试副本，与 `conducting-java-backend-mock-interviews/schemas/` 保持字节一致。它只描述当前 schema-1.2 的按姓名解析身份、用户注册、会话事件与复盘事件结构，用于用户解析、复盘构建和画像快照校验；画像 reducer 的唯一活动实现是 Cloud MCP Worker，Python 侧不实现云端 API。
+This schema is a content contract for JSON stored in readable RDS-JBryon routes. It is not an event envelope or an account/identity protocol. The user selects a route such as `project/12306/学习快照.json`; the Skill never asks for a user UUID, node ID, workspace epoch, or account registration.
 
-`manifest.json` 只列出当前仍在使用的 schema-1.2 定义：
+The `SessionSnapshot` preserves interview questions, original answers, follow-ups, and project evidence. `ReviewSnapshot` stores assessments and any profile changes as separate data. Project-specific assessments remain in the selected project's snapshot and must not be duplicated into a global profile. A local JSON or DOCX report is a derived output and cannot prove that RDS accepted or projected a write.
 
-```text
-Identity, Registration, Question, SessionEvent,
-QuestionReview, ProfileChange, ReviewEvent, ProfileSnapshot
-```
-
-任何已废弃的候选人索引或候选人目录模型都不在此目录中，也不得重新引入。
+The paired schema and manifest in `conducting-java-backend-mock-interviews/schemas/` must remain byte-identical. Do not reintroduce `Identity`, `Registration`, `ProfileSnapshot`, `userId`, `eventKey`, or `eventType` DTOs.

@@ -28,17 +28,17 @@ description: "Coach users through LeetCode Hot 100 and comparable algorithm prob
 
 ## 个人算法画像与每日练习
 
-此子系统不改变答疑内容和答案揭示程度。每次算法学习请求（讲题、代码修改、提示、完整解法或打卡）完成后，必须形成一条有证据的学习事件；只记录明确错误、未掌握、完成或用户主动打卡的事实。没有掌握度证据时记录中性的 `consulted`，不得臆测弱点。
+此子系统不改变答疑内容和答案揭示程度。每次算法学习请求（讲题、代码修改、提示、完整解法或打卡）完成后，按证据决定是否追加学习记录；只记录明确错误、未掌握、完成或用户主动打卡的事实。没有掌握度证据时记录中性的 `consulted`，不得臆测弱点。
 
-完整的事件、身份与快照字段约束见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
+学习快照字段与证据边界见 [references/algorithm-profile-contract.md](references/algorithm-profile-contract.md)。
 
-所有持久化遵守 [RDS V2 运行契约](references/rds-v2-runtime.md)，唯一远端工具是 `submit_event`；Skill 不直接读写 Drive，先核对凭据绑定身份，再读取 algorithm/learning。首次只读调用不会注册用户或创建 Outbox。
+所有持久化遵守 [RDS-JBryon 运行契约](../references/rds-jbryon-runtime.md)，唯一工具是 `rds`。按 `knowledge/algorithm-learning/学习快照.json` 读取与追加事实；不解析账户身份、不向用户索取内部标识。新目录先展示完整路径并确认，用户明确要求该路径时无需重复询问。
 
 ### 学习记录
-答疑后仅提交有证据的 `algorithm.learning.completed`。事件使用已有 schema-1.2 字段，详见 [算法字段契约](references/algorithm-profile-contract.md)。没有掌握度证据时记录中性的 `consulted`；不要推断弱点或评分。已提交事实保持 requestId/eventId/eventKey 不变，等待本机队列投递。
+答疑后仅记录有证据的学习事实。快照保留题目、用户明确表达的错误/完成情况和时间；没有掌握度证据时记为中性的 `consulted`，不要推断弱点或评分。读取当前 revision 后用最小 patch 追加，保存状态按 RDS-JBryon 实际请求状态报告。
 
 ### 每日练习
-按 [每日协议](references/algorithm-daily-protocol.md) 使用完整的 V2 分页画像。未完成题在下一日优先；7 日内不重复同题；默认 3–5 道循序渐进练习，首次不提供答案。画像缺失或还在构建时不假定历史；明确报告尚不能基于最新画像出题。用户反馈后只新增学习事件，不覆盖题单或直接修改分数。
+按 [每日协议](references/algorithm-daily-protocol.md) 使用当前 JSON 快照。未完成题在下一日优先；7 日内不重复同题；默认 3–5 道循序渐进练习，首次不提供答案。快照缺失或不可读时不假定历史；明确报告未读取到历史。用户反馈后追加学习记录，不覆盖题单或直接修改分数。
 
 ## 专项检查
-回溯、动态规划、二叉树或图题读取 [专项清单](references/special-topic-checklists.md) 对应部分。保持用户语言、最小改动、真实反例与复杂度。保存状态严格按 V2 回执区分本机、D1、投影、Drive。
+回溯、动态规划、二叉树或图题读取 [专项清单](references/special-topic-checklists.md) 对应部分。保持用户语言、最小改动、真实反例与复杂度。只有状态查询实际返回 `projected` 才报告云端快照已更新。

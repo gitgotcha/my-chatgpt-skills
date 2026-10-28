@@ -1,1 +1,1 @@
-{"schema_version":"1.2","artifacts":["Identity","Registration","Question","SessionEvent","QuestionReview","ProfileChange","ReviewEvent","ProfileSnapshot"]}
+{"schema_version":"rds-jbryon-interview-snapshots/2","artifacts":["Question","QuestionReview","ProfileChange","ProjectEvidence","ProjectAssessment","SessionSnapshot","ReviewSnapshot"]}

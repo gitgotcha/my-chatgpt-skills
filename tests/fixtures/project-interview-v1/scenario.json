@@ -1,0 +1,246 @@
+{
+  "fixtureOnly": true,
+  "environment": "isolated_local_tests_only",
+  "warning": "全部为合成数据；外层不是 submit_event DTO，禁止发送到真实 RDS。",
+  "proposedContractVersion": 1,
+  "identity": {
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "username": "隔离演示学员"
+  },
+  "project": {
+    "projectId": "11111111-1111-4111-8111-111111111111",
+    "displayName": "12306",
+    "basis": {
+      "kind": "source_learning",
+      "key": "source-learning:train-12306:local-verified"
+    },
+    "resumeVersion": null,
+    "resumeClaimIds": [],
+    "sourceRevision": "worktree-source-evidence:2026-10-23"
+  },
+  "sessions": [
+    {
+      "sessionId": "LEARN-20261023T020000Z-44444444-4444-4444-8444-000000000001",
+      "completedAt": "2026-10-23T02:08:00Z",
+      "attemptId": "33333333-3333-4333-8333-000000000001",
+      "variantId": "waiter-return",
+      "purpose": "initial_assessment",
+      "provenance": {
+        "answerOrigin": "actual_user",
+        "assistance": "hint",
+        "exactAnswerSeenBefore": true,
+        "exposureGroupId": "exposure-20261023"
+      },
+      "outcome": "partial",
+      "total": 62
+    },
+    {
+      "sessionId": "MOCK-20261024T020000Z-44444444-4444-4444-8444-000000000002",
+      "completedAt": "2026-10-24T02:05:00Z",
+      "attemptId": "33333333-3333-4333-8333-000000000002",
+      "variantId": "write-timeout-result-unknown",
+      "purpose": "targeted_retest",
+      "provenance": {
+        "answerOrigin": "actual_user",
+        "assistance": "none",
+        "exactAnswerSeenBefore": false,
+        "exposureGroupId": "exposure-20261024"
+      },
+      "outcome": "passed",
+      "total": 88
+    },
+    {
+      "sessionId": "MOCK-20261025T020000Z-44444444-4444-4444-8444-000000000003",
+      "completedAt": "2026-10-25T02:05:00Z",
+      "attemptId": "33333333-3333-4333-8333-000000000003",
+      "variantId": "hash-exists-field-missing",
+      "purpose": "targeted_retest",
+      "provenance": {
+        "answerOrigin": "actual_user",
+        "assistance": "none",
+        "exactAnswerSeenBefore": false,
+        "exposureGroupId": "exposure-20261025"
+      },
+      "outcome": "passed",
+      "total": 90
+    }
+  ],
+  "revision": {
+    "targetSession": "MOCK-20261024T020000Z-44444444-4444-4444-8444-000000000002",
+    "reviewVersion": 2,
+    "outcome": "unscored",
+    "scores": null
+  },
+  "recap": {
+    "simulatedDate": "2026-10-24",
+    "expectedBusinessWrites": 0,
+    "expectedAttemptsAdded": 0
+  },
+  "expectedTransitions": [
+    "open",
+    "open",
+    "improving",
+    "closed",
+    "improving"
+  ],
+  "baseSession": {
+    "schemaVersion": "1.2",
+    "projectContractVersion": 1,
+    "eventId": "44444444-4444-4444-8444-000000000001",
+    "eventKey": "22222222-2222-4222-8222-222222222222:interview:session:LEARN-20261023T020000Z-44444444-4444-4444-8444-000000000001:v1",
+    "eventType": "interview.session.completed",
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "username": "隔离演示学员",
+    "sessionId": "LEARN-20261023T020000Z-44444444-4444-4444-8444-000000000001",
+    "interviewType": "project_learning",
+    "domain": "java-backend",
+    "startedAt": "2026-10-23T02:00:00Z",
+    "completedAt": "2026-10-23T02:08:00Z",
+    "status": "review_pending",
+    "resumeContext": {
+      "used": false,
+      "source": "verified_local_source_learning",
+      "claims": []
+    },
+    "questions": [
+      {
+        "questionId": "Q1",
+        "domain": "java-backend",
+        "sourceTags": [
+          "project"
+        ],
+        "topicTags": [
+          "12306",
+          "cache-return-contract"
+        ],
+        "resumeClaimIds": [],
+        "weaknessId": "W-return-contract",
+        "originalQuestion": "A已经回填5张票，B等待锁后二次检查命中，B最终显示多少？",
+        "originalAnswer": "B应该是5，因为二次检查读到了Redis。",
+        "followUps": [
+          {
+            "question": "B命中后，有哪一行把quantityObj写进B自己的返回Map了？",
+            "answer": "没有。填Map都在miss的if里，B会跳过。"
+          }
+        ],
+        "timeline": [
+          {
+            "messageId": "Q1-a0",
+            "role": "assistant",
+            "text": "A已经回填5张票，B等待锁后二次检查命中，B最终显示多少？",
+            "at": "2026-10-23T02:00:00Z"
+          },
+          {
+            "messageId": "Q1-u0",
+            "role": "user",
+            "text": "B应该是5，因为二次检查读到了Redis。",
+            "at": "2026-10-23T02:05:00Z"
+          },
+          {
+            "messageId": "Q1-a1",
+            "role": "assistant",
+            "text": "B命中后，有哪一行把quantityObj写进B自己的返回Map了？",
+            "at": "2026-10-23T02:06:00Z"
+          },
+          {
+            "messageId": "Q1-u1",
+            "role": "user",
+            "text": "没有。填Map都在miss的if里，B会跳过。",
+            "at": "2026-10-23T02:07:00Z"
+          }
+        ],
+        "projectEvidence": {
+          "project": {
+            "projectId": "11111111-1111-4111-8111-111111111111",
+            "displayName": "12306",
+            "basis": {
+              "kind": "source_learning",
+              "key": "source-learning:train-12306:local-verified"
+            },
+            "resumeVersion": null,
+            "resumeClaimIds": [],
+            "sourceRevision": "worktree-source-evidence:2026-10-23"
+          },
+          "attemptId": "33333333-3333-4333-8333-000000000001",
+          "questionKey": "ticket.query.cache-return",
+          "variantId": "waiter-return",
+          "variantAxes": [
+            "control_flow",
+            "return_value"
+          ],
+          "purpose": "initial_assessment",
+          "sourceSkill": "software-project-learning",
+          "provenance": {
+            "answerOrigin": "actual_user",
+            "assistance": "hint",
+            "exactAnswerSeenBefore": true,
+            "exposureGroupId": "exposure-20261023"
+          },
+          "sourceRefs": [
+            "S-local:SeatMarginCacheLoader.java:61"
+          ]
+        }
+      }
+    ]
+  },
+  "baseReview": {
+    "schemaVersion": "1.2",
+    "projectContractVersion": 1,
+    "eventId": "55555555-5555-4555-8555-000000000001",
+    "eventKey": "22222222-2222-4222-8222-222222222222:interview:review:LEARN-20261023T020000Z-44444444-4444-4444-8444-000000000001:v1",
+    "eventType": "interview.review.completed",
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "username": "隔离演示学员",
+    "sessionId": "LEARN-20261023T020000Z-44444444-4444-4444-8444-000000000001",
+    "interviewType": "project_learning",
+    "domain": "java-backend",
+    "completedAt": "2026-10-23T02:10:00Z",
+    "reviewVersion": 1,
+    "sourceSessionEventId": "44444444-4444-4444-8444-000000000001",
+    "sourceType": "project_learning",
+    "evidenceType": "full_transcript",
+    "evidenceConfidence": "high",
+    "questionReviews": [
+      {
+        "questionId": "Q1",
+        "assessment": "首答遗漏本次返回容器。",
+        "evidence": {
+          "originalAnswer": "B应该是5，因为二次检查读到了Redis。"
+        },
+        "recommendations": [
+          "按返回契约复述。"
+        ],
+        "projectAssessment": {
+          "attemptId": "33333333-3333-4333-8333-000000000001",
+          "rubricVersion": "project-campus-v1",
+          "scores": {
+            "technical": 18,
+            "projectEvidence": 17,
+            "causal": 10,
+            "tradeoff": 9,
+            "expression": 8
+          },
+          "total": 62,
+          "outcome": "partial",
+          "evidenceRefs": [
+            "Q1:originalAnswer",
+            "Q1:timeline:Q1-u0"
+          ],
+          "reason": "首答把缓存命中当成已返回，遗漏本次局部 Map。",
+          "weaknesses": [
+            {
+              "weaknessId": "W-return-contract",
+              "title": "缓存命中与返回契约",
+              "outcome": "failed"
+            }
+          ]
+        }
+      }
+    ],
+    "profileChanges": [],
+    "recommendations": [
+      "按项目追踪条件变式。"
+    ],
+    "applyProfileChanges": true
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.1",
+  "domain": "planning-execution",
+  "route": ["knowledge", "study-planning"],
+  "sourceSkill": "adaptive-study-planning",
+  "dimensions": [
+    {
+      "dimensionKey": "goals",
+      "subjectKeyDescription": "Stable goal topics such as daily-budget, morning-budget, afternoon-budget and evening-budget.",
+      "description": "Explicitly confirmed long-term study minutes, group budgets, and changes to the future default with an effective date."
+    },
+    {
+      "dimensionKey": "preferences",
+      "subjectKeyDescription": "Stable preference topics such as algorithm-mix, task-priority, rest-pattern and feedback-style.",
+      "description": "Only preferences the user explicitly confirmed; model suggestions that were not accepted do not belong here."
+    },
+    {
+      "dimensionKey": "execution",
+      "subjectKeyDescription": "Business date plus task key, for example 2026-10-20/12306.",
+      "description": "User-reported used task-window minutes, reported focus minutes with their stated scope, task output, partial work, and interruptions."
+    },
+    {
+      "dimensionKey": "load-feedback",
+      "subjectKeyDescription": "Business date plus feedback topic, for example 2026-10-20/fatigue.",
+      "description": "Explicit user statements of fatigue, inability to continue, rest, or recovery; never an inferred personality or diagnosis."
+    },
+    {
+      "dimensionKey": "adjustments",
+      "subjectKeyDescription": "Business date plus adjustment topic, for example 2026-10-20/remaining-halved or daily-budget-from-2026-10-21.",
+      "description": "Day-scoped adjustments, recoveries, and long-term changes the user explicitly accepted, including their effective scope."
+    }
+  ],
+  "evidencePolicy": {
+    "recordWhen": [
+      "The user explicitly reports used task-window minutes or focus minutes and states which measure they mean.",
+      "The user explicitly reports that a planned task was completed, partially completed, blocked, cancelled, or not started.",
+      "The user explicitly says they are tired, cannot continue after a rest, stopped for the day, or have recovered.",
+      "The user explicitly confirms or changes a day budget, a long-term daily goal, or a group budget.",
+      "The user explicitly confirms a split, priority, rest pattern, or feedback preference.",
+      "The user explicitly corrects an earlier report about time, dates, completion, or load."
+    ],
+    "doNotRecordWhen": [
+      "The model proposed a split, order, duration, priority, or rest pattern and the user has not accepted it.",
+      "A task was only planned, assigned, listed, or explained by the model.",
+      "The model infers mastery, ability, discipline, personality, illness, or long-term capacity from time spent or one fatigue report.",
+      "The observation is copied from a synthetic example, a test fixture, or another user's material.",
+      "The fact belongs to algorithm, interview, resume-knowledge, or backend-project-learning evidence.",
+      "A real-interview profile change has not been confirmed under the review Skill's own rule."
+    ],
+    "allowedOutcomes": [
+      "observed",
+      "consulted",
+      "stuck",
+      "incorrect",
+      "partial",
+      "completed",
+      "correct",
+      "passed",
+      "failed"
+    ],
+    "sourceRefPolicy": "Use a locator that can be checked in the current environment, such as a conversation date and turn identifier or a platform message identifier. If no verifiable locator exists, keep the content in the current plan and report that the remote record lacks a source reference; never invent one.",
+    "minimumEvidenceTextLength": 8
+  },
+  "runtime": {
+    "tool": "rds",
+    "readOperation": "snapshot.read",
+    "writeOperation": "snapshot.patch",
+    "routePolicy": "user-readable-path",
+    "accountIdentityResolution": false,
+    "directDriveAccess": false
+  },
+  "portability": {
+    "platforms": [
+      "codex",
+      "chatgpt",
+      "claude",
+      "workbuddy"
+    ],
+    "coreContractDependsOnOpenaiYaml": false
+  }
+}

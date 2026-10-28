@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "interview-session-snapshot/2",
+  "sessionId": "MOCK-20260806-001",
+  "interviewType": "mock",
+  "domain": "java-backend",
+  "startedAt": "2026-08-06T01:00:00Z",
+  "completedAt": "2026-08-06T01:40:00Z",
+  "status": "review_pending",
+  "resumeContext": {
+    "used": true,
+    "source": "虚构简历；仅用于隔离验证",
+    "claims": [
+      "claim-smoke-redis-cache"
+    ]
+  },
+  "questions": [
+    {
+      "questionId": "Q-001",
+      "domain": "java-backend",
+      "sourceTags": [
+        "resume"
+      ],
+      "topicTags": [
+        "redis",
+        "cache-consistency"
+      ],
+      "resumeClaimIds": [
+        "claim-smoke-redis-cache"
+      ],
+      "weaknessId": null,
+      "originalQuestion": "项目里如何保证缓存与数据库的一致性？",
+      "originalAnswer": "先删缓存再更新数据库。",
+      "followUps": [
+        {
+          "question": "并发下这个顺序会产生什么问题？",
+          "answer": "可能会出现脏读。"
+        }
+      ],
+      "timeline": [
+        {
+          "at": "2026-08-06T01:05:00Z",
+          "kind": "question"
+        },
+        {
+          "at": "2026-08-06T01:09:00Z",
+          "kind": "answer"
+        }
+      ]
+    }
+  ]
+}

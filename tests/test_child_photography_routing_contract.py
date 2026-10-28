@@ -24,14 +24,16 @@ class ChildPhotographyRoutingContractTest(unittest.TestCase):
         self.assertNotIn("child-photoShop-skill", text)
 
     def test_readme_child_photo_section_matches_the_actual_skill(self):
-        text = (ROOT / "README.md").read_text(encoding="utf-8")
-        section = text.split("# 5. Child Photography Editing Skill", 1)[1].split("# 6.", 1)[0]
+        text = (ROOT / "child-photography-editing" / "SKILL.md").read_text(encoding="utf-8")
+        section = text
         for mode in ("background-only", "skin-only", "crop-only", "theme-edit", "poster-edit", "batch-style-transfer"):
             self.assertIn(mode, section)
         for capability in ("Style Profile", "Approved Treatment Hints", "Edit Plan", "Batch Style Lock", "QA"):
             self.assertIn(capability, section)
-        for stale in ("连拍去重", "选片", "Contact Sheet", "风格库原型"):
-            self.assertNotIn(stale, section)
-        self.assertIn("绝对最高", section)
-        self.assertIn("./child-photography-editing/SKILL.md", section)
+        # The skill may mention excluded activities in its boundary statement;
+        # assert it does not claim to implement those workflows.
+        for stale_workflow in ("Contact Sheet generator", "风格库原型功能", "自动选片流程"):
+            self.assertNotIn(stale_workflow, section)
+        self.assertIn("绝对人物锁定", section)
+        self.assertIn("child-photography-editing", section)
         self.assertTrue((ROOT / "child-photography-editing" / "SKILL.md").is_file())

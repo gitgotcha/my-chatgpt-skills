@@ -11,27 +11,19 @@ from docx import Document
 from scripts.create_review_report import create_review_report
 
 
-USER_ID = "11111111-1111-4111-8111-111111111111"
-SESSION_EVENT_ID = "22222222-2222-4222-8222-222222222222"
-REVIEW_EVENT_ID = "33333333-3333-4333-8333-333333333333"
 SESSION_ID = "REAL-20260814T000000Z-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
 
-def _review_event() -> dict[str, object]:
-    """One persisted schema-1.2 ``interview.review.completed`` JSON record."""
+def _review_snapshot() -> dict[str, object]:
+    """One RDS-JBryon review snapshot content object."""
     return {
-        "schemaVersion": "1.2",
-        "eventId": REVIEW_EVENT_ID,
-        "eventKey": f"{USER_ID}:interview:review:{SESSION_ID}:v1",
-        "eventType": "interview.review.completed",
-        "userId": USER_ID,
-        "username": "乔炳源",
+        "schemaVersion": "interview-review-snapshot/2",
         "sessionId": SESSION_ID,
         "interviewType": "real",
         "domain": "java-backend",
         "completedAt": "2026-08-14T01:00:00Z",
         "reviewVersion": 1,
-        "sourceSessionEventId": SESSION_EVENT_ID,
+        "sourceSessionId": SESSION_ID,
         "sourceType": "real",
         "evidenceType": "full_transcript",
         "evidenceConfidence": "high",
@@ -50,7 +42,6 @@ def _review_event() -> dict[str, object]:
         }],
         "recommendations": ["复测缓存一致性"],
         "applyProfileChanges": False,
-        "persistenceStatus": "cloud_accepted",
         "overallAssessment": "整体可用，缓存一致性需要补强。",
     }
 
@@ -72,17 +63,15 @@ class ReviewReportTests(unittest.TestCase):
             cell.text for table in document.tables for row in table.rows for cell in row.cells
         )
 
-    def test_report_identity_uses_username_and_user_id(self) -> None:
-        text = self._render(_review_event())
+    def test_report_uses_session_route_content_without_user_identity(self) -> None:
+        text = self._render(_review_snapshot())
 
         self.assertTrue(self.output.exists())
-        self.assertIn("乔炳源", text)
-        self.assertIn(USER_ID, text)
+        self.assertNotIn("用户 ID", text)
         self.assertIn(SESSION_ID, text)
-        self.assertIn(SESSION_EVENT_ID, text)
 
     def test_report_renders_evidence_assessment_changes_and_recommendations(self) -> None:
-        text = self._render(_review_event())
+        text = self._render(_review_snapshot())
 
         self.assertIn("证据类型", text)
         self.assertIn("full_transcript", text)
@@ -91,7 +80,7 @@ class ReviewReportTests(unittest.TestCase):
         self.assertIn("weakness", text)
 
     def test_report_keeps_navigation_and_pagination(self) -> None:
-        self._render(_review_event())
+        self._render(_review_snapshot())
 
         document = Document(self.output)
         text = "\n".join(paragraph.text for paragraph in document.paragraphs)
@@ -106,7 +95,7 @@ class ReviewReportTests(unittest.TestCase):
         }
         self.source.write_text(json.dumps(legacy, ensure_ascii=False), encoding="utf-8")
 
-        with self.assertRaisesRegex(ValueError, "schemaVersion 1.2"):
+        with self.assertRaisesRegex(ValueError, "interview-review-snapshot/2"):
             create_review_report(self.source, self.output)
 
         self.assertFalse(self.output.exists())

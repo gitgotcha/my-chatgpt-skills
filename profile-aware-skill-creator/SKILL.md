@@ -47,7 +47,7 @@ A plain Skill must not contain `references/profile-contract.md`,
 must not mention profile events. Do not create the `agents/openai.yaml`
 adapter unless the target platform uses it.
 
-Validate in plain mode and stop:
+Validate in plain mode:
 
 ```text
 python scripts/validate_profile_skill.py --mode plain <resolved-target-skill-dir>
@@ -55,20 +55,12 @@ python scripts/validate_profile_skill.py --mode plain <resolved-target-skill-dir
 
 ## Profile branch (answer: yes)
 
-1. Create or update the ordinary Skill exactly as in the plain branch.
-2. Read [references/profile-authoring-standard.md](references/profile-authoring-standard.md)
-   and follow its decision record: target directory, safe domain, dimensions,
-   and observable evidence rules.
-3. Read [references/submit-event-runtime.md](references/submit-event-runtime.md)
-   and reuse its envelopes, receipts, and fail-closed rules verbatim; never
-   invent storage or write profile files directly.
-4. Add exactly three artifacts: `references/profile-contract.md`,
-   `schemas/profile-capability.json`, and `tests/test_profile_contract.py`,
-   plus a minimal `SKILL.md` link to the contract. Create `agents/openai.yaml`
-   only when the target platform uses it; the core contract must not depend on
-   it.
+1. Create or update the ordinary Skill as in the plain branch.
+2. Follow the decision record in [references/profile-authoring-standard.md](references/profile-authoring-standard.md): target directory, readable nested route, dimensions, and observable evidence. The taxonomy `domain` field is not the persistence path.
+3. Read the shared [RDS-JBryon runtime contract](../references/rds-jbryon-runtime.md) and define the Skill's readable route plus JSON snapshot shape. The only supported persistence backend is the single-user `rds` MCP. Do not generate account identity resolution, UUID binding, event projection, or direct file/Drive storage.
+4. Add exactly three artifacts: `references/profile-contract.md`, `schemas/profile-capability.json`, and `tests/test_profile_contract.py`, plus a minimal `SKILL.md` link. Create `agents/openai.yaml` only when the target platform uses it.
 
-Validate in profile mode and run the generated contract tests as a forward test; they must execute and cover capability preflight/fail-closed, user consent, immutable evidence, and full scan with preservation — a placeholder test is rejected:
+Validate in profile mode and run generated contract tests as a forward test; they must cover capability/path preflight and fail-closed behavior, explicit route confirmation when required, snapshot reads and minimal revision-based patches, and preservation of original evidence — placeholder tests are rejected:
 
 ```text
 python scripts/validate_profile_skill.py --mode profile <resolved-target-skill-dir>
@@ -77,6 +69,6 @@ python scripts/validate_profile_skill.py --mode profile <resolved-target-skill-d
 The directory argument is always the user's resolved target path, never a
 default location.
 
-## RDS V2 接入
+## RDS-JBryon 接入
 
-生成画像技能时必须使用 [RDS V2 运行契约](references/rds-v2-runtime.md) 和更新后的 submit-event-runtime.md。身份通过凭据校验；未绑定且用户明确要求个人功能时允许通过账户网关自助注册，已绑定账户不得按姓名自动切换。capabilities/user.resolve/projection.read/event.status 使用 storageVersion:2 原生查询。普通技能创建不产生用户学习事件。
+生成需要跨会话状态的 Skill 时，必须遵循共享 [RDS-JBryon 运行契约](../references/rds-jbryon-runtime.md)，并将状态建模为用户可读路径下的 JSON 快照。用户只提供路由名称，不提供账户身份、UUID、nodeId 或 workspace epoch。新顶层目录或含义不明确的路由先展示完整路径并取得确认。Skill 只调用 `rds` MCP，不得调用已退役的 `reliable_drive_sync`、账户解析、事件投影或直接 Drive/D1/HTTP。普通 Skill 创建不产生用户学习记录。

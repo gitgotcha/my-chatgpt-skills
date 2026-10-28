@@ -23,14 +23,13 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = SKILL_ROOT / "scripts" / "validate_profile_skill.py"
 
-RUNTIME_TOOL = "submit_event"
+RUNTIME_TOOL = "rds"
 RUNTIME_OPERATIONS = {
     "tool": RUNTIME_TOOL,
-    "capabilitiesEvent": "capabilities",
-    "identityResolveEvent": "user.resolve",
-    "identityRegisterEvent": "admin_only",
-    "profileReadEvent": "projection.read",
-    "evidenceWriteEvent": "profile.evidence.recorded",
+    "readOperation": "snapshot.read",
+    "writeOperation": "snapshot.patch",
+    "routePolicy": "user-readable-path",
+    "accountIdentityResolution": False,
     "directDriveAccess": False,
 }
 PLATFORMS = ["codex", "chatgpt", "claude", "workbuddy"]
@@ -66,27 +65,23 @@ PROFILE_CONTRACT_MD = """# Profile Contract
 
 ## Capability Gate
 
-Call system.capabilities.read before any profile operation.
+Use the `rds` MCP and resolve the selected readable path before any snapshot operation. Fail closed when the route is unsupported.
 
-## Identity and Consent
+## Route Confirmation
 
-Resolve the user and require explicit consent before registration.
+Ask explicit confirmation before creating a new or ambiguous path.
 
 ## Snapshot Read
 
-Read the profile with profile.snapshot.read before personalization.
+Read the snapshot with snapshot.read before personalization and use its current revision.
 
-## Evidence Recording
+## Snapshot Patch
 
-Record at most one consolidated profile.evidence.recorded event per task.
-
-## Correction Events
-
-Corrections use supersede or invalidate with a targetEventKey from evidenceRefs.
+Use snapshot.patch with the smallest change and preserve the original answer and existing snapshot entries.
 
 ## Failure and Receipt Wording
 
-pending means locally retained; cloud_accepted means accepted with background sync.
+Only report the saved state after the request status is projected.
 """
 
 PROFILE_TEST_PY = """import unittest
@@ -94,30 +89,27 @@ PROFILE_TEST_PY = """import unittest
 
 class ProfileContractTest(unittest.TestCase):
     def test_capabilities_preflight_fail_closed(self) -> None:
-        # system.capabilities.read runs before any profile op; when the
-        # capability is unsupported the business task continues without profile.
-        self.assertTrue(True)
+        self.assertEqual("rds", "rds")
 
-    def test_user_consent_before_registration(self) -> None:
-        # system.user.resolve, then explicit consent before system.user-registered.
-        self.assertTrue(True)
+    def test_route_confirmation_before_creation(self) -> None:
+        self.assertTrue("explicit confirmation" in "explicit confirmation")
 
-    def test_evidence_is_immutable_and_read_only(self) -> None:
-        # only profile.evidence.recorded events; profile.snapshot.read is
-        # read-only and the Skill never overwrites a snapshot.
-        self.assertTrue(True)
+    def test_snapshot_read_patch_and_revision(self) -> None:
+        request = {"operation": "snapshot.patch", "baseRevision": 3}
+        self.assertEqual(3, request["baseRevision"])
 
-    def test_full_scan_preserves_existing_files(self) -> None:
-        # every existing file is read before writing; unrelated files are
-        # preserved byte-for-byte and a base initializer is never re-run.
-        self.assertTrue(True)
+    def test_original_answer_and_existing_snapshot_are_preserved(self) -> None:
+        snapshot = {"originalAnswer": "原答", "entries": ["old"]}
+        self.assertEqual("原答", snapshot["originalAnswer"])
+        self.assertEqual(["old"], snapshot["entries"])
 """
 
 
 def _capability_document(domain: str = "english-learning", source_skill: str = "english-learning") -> dict:
     return {
-        "schemaVersion": "1.0",
+        "schemaVersion": "1.1",
         "domain": domain,
+        "route": ["knowledge", "english-learning"],
         "sourceSkill": source_skill,
         "dimensions": [
             {

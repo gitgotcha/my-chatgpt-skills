@@ -1,4 +1,4 @@
-"""Create a local Word report from one persisted schema-1.2 review JSON."""
+"""Create a local Word report from one interview-review-snapshot/2 JSON file."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def _value(document: Document, value: object) -> None:
         document.add_paragraph(str(value))
 
 
-def _schema12_report(document: Document, data: dict[str, object]) -> None:
+def _snapshot2_report(document: Document, data: dict[str, object]) -> None:
     """Render only the persisted review JSON, without consulting a snapshot."""
     title = document.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -100,19 +100,17 @@ def _schema12_report(document: Document, data: dict[str, object]) -> None:
     document.add_page_break()
     _add_toc(document)
 
-    document.add_heading("一、身份与会话信息", level=1)
-    identity = {
-        "姓名": data.get("username", "未提供"),
-        "用户 ID": data.get("userId", "未提供"),
+    document.add_heading("一、会话信息", level=1)
+    session = {
         "会话 ID": data.get("sessionId", "未提供"),
         "复盘版本": data.get("reviewVersion", "未提供"),
         "来源类型": data.get("sourceType", "未提供"),
-        "来源会话事件": data.get("sourceSessionEventId", "未提供"),
+        "来源会话": data.get("sourceSessionId", "未提供"),
         "完成时间": data.get("completedAt", "未提供"),
     }
     table = document.add_table(rows=0, cols=2)
     table.style = "Table Grid"
-    for key, value in identity.items():
+    for key, value in session.items():
         cells = table.add_row().cells
         cells[0].text = str(key)
         cells[1].text = str(value)
@@ -121,7 +119,6 @@ def _schema12_report(document: Document, data: dict[str, object]) -> None:
         "证据类型": data.get("evidenceType", "未提供"),
         "证据置信度": data.get("evidenceConfidence", "未提供"),
         "画像变化是否应用": data.get("applyProfileChanges", False),
-        "持久化状态": data.get("persistenceStatus", "未提供"),
     })
     document.add_heading("三、综合评价", level=1)
     overall = data.get("overallAssessment", data.get("overall_assessment", ""))
@@ -169,20 +166,20 @@ def _schema12_report(document: Document, data: dict[str, object]) -> None:
 
 
 def create_review_report(input_path: Path, output_path: Path) -> None:
-    """Render the persisted schema-1.2 review JSON and nothing else.
+    """Render an interview-review-snapshot/2 local JSON copy.
 
-    Legacy report shapes are not rendered here; reading an old report would need a
+    Legacy event report shapes are not rendered here; reading an old report would need a
     separately named read-only adapter, never a branch in the current save path.
     """
     data = json.loads(input_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("review record JSON root must be an object")
-    if data.get("eventType") != "interview.review.completed" or data.get("schemaVersion") != "1.2":
-        raise ValueError("review record must be a schemaVersion 1.2 interview.review.completed JSON")
+    if data.get("schemaVersion") != "interview-review-snapshot/2":
+        raise ValueError("review record must use interview-review-snapshot/2")
 
     document = Document()
     _configure(document)
-    _schema12_report(document, data)
+    _snapshot2_report(document, data)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     document.save(output_path)
 

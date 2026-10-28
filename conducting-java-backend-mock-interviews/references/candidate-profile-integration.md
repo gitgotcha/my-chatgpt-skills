@@ -1,9 +1,19 @@
-# 用户画像与交接契约
+# 简历、项目快照与单用户边界
 
-身份只由 `submit_event` 按姓名解析得到：Worker 返回规范化的 `username` 与全局 `userId`，本轮所有会话、问题和交接包都使用同一个 `userId`。解析前不能读取简历、画像或会话；同名冲突无法消解时停止并要求人工选择。
+本 Skill 面向乔炳源个人使用。RDS-JBryon 的单用户连接已在工具层配置，不存在本 Skill 的账户注册、姓名解析或 UUID 选择步骤。项目记录按用户可读路径组织；RDS-JBryon 的正式运行契约见 [`software-project-learning/references/rds-jbryon-runtime.md`](../../software-project-learning/references/rds-jbryon-runtime.md)。这里的“候选人”只表示面试练习对象，不代表需要建立独立用户画像或身份绑定。
 
-读取画像时只取选定领域的 `next_interview_guidance` 与稳定弱点。技术弱点不得跨领域污染；沟通、项目表达和问题分析可以作为通用能力使用。弱点题使用业务场景、对比、代码判断或异常边界等变式，数量不超过总题数 40%。
+## 取数与证据
 
-会话事件由 Worker 追加到 `my-chatGPT-skills/users/<userId>/interview/events/`。结束时只生成 `mock_interview` 原始会话，包含 `MOCK-*` ID、`evidence_type: system_transcript`、`evidence_confidence: 0.6`、逐题元数据、回答、交接目标和 `review_pending`。模拟 Skill 不生成 `evidence_delta`、不创建画像快照、不更新画像。由 reviewing Skill 消费交接后，才依据统一 Review 创建确定性事件。
+- 有简历时，只用已确认的简历文本作为个人经历依据；没有简历时，明确标记“通用训练”，不要补造个人项目。简历材料不默认上传到快照。
+- 项目专项按 `project-12306` → `project/12306` 解析，读取对应 `学习快照.json`；其它主题使用用户确认的多层路由，如 `knowledge/java/jvm`。如果路径不存在，先确认是否创建；不要按相似目录或最近访问时间猜目标。
+- 题目可综合简历、快照中的已学框架/历史原答、目标仓库源码和近期公开面经。联网题源只作为题目线索，不作为技术事实；来源去重和标注见 [`web-question-sourcing.md`](web-question-sourcing.md)。
+- 从快照选择历史弱点时，只能基于已有明确评价和证据；不能把一次答错推成长期弱点，也不跨项目串用。换项目时清空上一项目的上下文。
+- RDS 不可用或读取不完整时，报告缺少的证据层；不得声称“基于快照/简历定制”。用户允许后可以继续通用模拟。
 
-提交回执为 `deliveryState: "pending"` 时，会话已在本机 SQLite Outbox 持久排队；`cloud_accepted` 时已进入 D1 Outbox，但 Drive 仍异步处理。会话业务状态保持 `review_pending`；不得退回旧目录、直接写 Drive或静默切换用户。
+## 保存
+
+实际面试回答后，保留题目、题源卡、关联项目/源码引用、用户原答、追问和补答时间线。答案讲评和参考答案是教练生成内容，要与用户原答分开存放。一次面试内的题目和补答归入同一个 session；保存到所选项目 `学习快照.json` 时，按当前快照版本做最小变更，等待 RDS-JBryon 的权威状态后报告结果。本地 JSON 仅是临时或本地报告材料，不能冒充云端快照。
+
+## 题目难度标尺
+
+“字节校招难度”是训练口径，不是内部题库或录用标准：从项目真实主链路出发，逐步追问关键源码、状态归属、异常与并发边界、验证方式和方案取舍。候选人无法解释基础事实时先补链路，不用堆高级术语制造难度。

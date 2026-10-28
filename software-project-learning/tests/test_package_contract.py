@@ -44,6 +44,36 @@ class PackageContractTest(unittest.TestCase):
                         "linked resource is missing",
                     )
 
+    def test_ticket_dialogue_publishes_visible_images_and_complete_structure(self):
+        # The complete unit must keep its images visible and its eight sections.
+        example = SKILL_ROOT / "references" / "examples" / "ticket-query-rds-complete-dialogue.md"
+        text = example.read_text(encoding="utf-8")
+        for asset in (
+            "ticket-query-main-sequence.png",
+            "ticket-margin-cold-sequence.png",
+            "ticket-margin-race-sequence.png",
+        ):
+            with self.subTest(asset=asset):
+                self.assertTrue(
+                    (SKILL_ROOT / "references" / "examples" / "assets" / asset).is_file()
+                )
+                self.assertIn(f"](assets/{asset})", text)
+        for heading in (
+            "## 1. 场景",
+            "## 2. 可见时序图",
+            "## 3. 源码定位",
+            "## 4. 保留真实分支的注释节选",
+            "## 5. 状态与反例",
+            "## 6. 取舍与验证",
+            "## 7. 可口述答案",
+            "## 8. 今日追问（只此一道）",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, text)
+        # The file ends with exactly the one follow-up question, not a new module.
+        last_line = text.rstrip().splitlines()[-1]
+        self.assertTrue(last_line.startswith("**") and last_line.endswith("**"))
+
 
 if __name__ == "__main__":
     unittest.main()

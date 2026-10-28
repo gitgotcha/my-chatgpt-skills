@@ -1,70 +1,14 @@
-# 画像与存储契约
+# 简历知识学习快照
 
-所有持久化只通过 `submit_event` 提交：本地 MCP 先写 SQLite Outbox，Worker `/v1/jobs` 再写 D1 Outbox，QStash/Worker 异步校验并物化到 Drive。技能不直接访问存储层，也不得回退到旧目录。
+状态保存在 `knowledge/java/resume-interview/学习快照.json`，遵守仓库共享的 [RDS-JBryon 运行契约](../../references/rds-jbryon-runtime.md)。简历原文件不默认上传；只保存用户确认的简历声明、题目、实际回答、评分依据和掌握变化。
 
-本地回执 `deliveryState: "cloud_accepted"` 只确认 D1 Outbox 接收；`pending` 只确认 SQLite 持久排队。两者都不证明 Drive 或派生快照已经完成。
-
-## 规范目录
-
-唯一规范根是 `DriveRoot/my-chatGPT-skills/`。本领域的目录形状为：
-
-```text
-DriveRoot/my-chatGPT-skills/
-├── user-registry/
-│   └── registration-<userId>.json
-└── users/<userId>/
-    └── resume-knowledge/
-        ├── sources/resume/snapshots/resume-<version>-<fingerprint>.json
-        ├── question-bank/snapshots/question-bank-<version>-<eventId>.json
-        ├── events/event-<eventId>.json
-        ├── profile/snapshots/snapshot-<UTC>-<headEventId>.json
-        └── plans/daily/daily-plan-<localDate>-<planId>.json
-```
-
-`users/<userId>/resume-knowledge/` 是本领域的唯一写入范围。全局注册位于 `user-registry/`，用户目录位于 `users/<userId>/`。
-
-## 事件类型
-
-| 事件 | 物化结果 |
-| --- | --- |
-| `resume-knowledge.resume-ingested` | 简历声明快照与文件指纹 |
-| `resume-knowledge.claim-confirmed` | 记录确认，供下一版题库使用 |
-| `resume-knowledge.claim-rejected` | 记录否认，供下一版题库使用 |
-| `resume-knowledge.question-bank-created` | 与简历版本绑定的题库快照 |
-| `resume-knowledge.daily-plan-created` | 不可变的当日题单 |
-| `resume-knowledge.answer-scored` | 首次有效评分事件与新的掌握度快照 |
-
-## 掌握度
-
-题目掌握度采用 EWMA：
+题目掌握度规则：
 
 ```text
 首次：masteryScore = 本次得分
 后续不同日期：newMasteryScore = 0.6 * 本次得分 + 0.4 * 原掌握度
 ```
 
-知识点掌握度是该知识点下所有已考规范题当前掌握度的平均值。未考题保持 `untested`，不按 0 分计入平均值；同时单独保存覆盖率，避免少量高分掩盖大量未考题。
+知识点掌握度是该知识点下已考规范题当前掌握度的平均值。未考题保持 `untested`，不计入平均值，但计入覆盖率。
 
-## 每日一次计分
-
-计分幂等键为 `userId + localDate + questionKey`。同一用户、同一自然日、同一 questionKey，只接受当天第一次回答计分。
-
-- 当天第一次回答：生成反馈，提交 `answer-scored`，更新掌握度并生成快照。
-- 当天再次回答：仍生成完整反馈，但明确提示今日已计分；不提交事件，不更新画像。
-- 次日同题再次出现：生成新的日期级幂等键，允许重新计分。
-
-## 每日题单
-
-每日默认五题：两道当前题目掌握度最低的题、一道尚未考察的简历明示题、一道项目场景追问题、一道历史低分复测题。
-
-选择必须去重，同一 `questionKey` 不在同一题单中重复出现。弱项排序依次考虑：低题目掌握度 -> 低知识点掌握度 -> 更久未复测 -> 更高简历相关度。未考题使用专门的新题位置，不按 0 分混入低分排序。
-
-证据不足以安全提供五个不同题目时，返回更少题目并解释原因，禁止使用无依据的通用八股补齐。
-
-当日题单已创建后不可变，已存在时原样返回，不重新生成。当天上传的新简历从下一个尚未创建题单的日期生效。
-
-## 快照
-
-每个首次有效 `answer-scored` 事件后，Worker 运行 reducer 生成新的不可变快照，包含简历版本、`headEventId`、知识点掌握度、题目掌握度、题库覆盖率、近期错误与回答问题、按优先级排序的薄弱点、下一轮推荐复习内容与 `sourceEventKeys`。
-
-快照是事件的派生结果，技能不上传也不覆盖快照。
+以 `localDate + questionKey` 判断当天是否已计分。同一天重复回答仍提供完整反馈，但不重复计分或覆盖既有答案；次日再次作答可以新增一条记录。同日同题只接受第一次回答计分。每日默认五题，优先低分题并按 `questionKey` 去重。当天题单已创建后原样复用，不因重新调用而变更；用户纠正已有记录时追加修订并保留原版本。证据不足以提供五个不同题目时返回更少题目，禁止用无依据的通用八股补齐。

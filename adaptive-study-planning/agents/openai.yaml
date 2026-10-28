@@ -1,0 +1,7 @@
+interface:
+  display_name: "自适应学习规划"
+  short_description: "统筹每日学习总量、执行反馈与跨天调整，专业内容交给现有学习 Skills"
+  default_prompt: "使用 $adaptive-study-planning 按我的每日目标安排今天的学习；先只列计划，不要开始讲课。"
+
+policy:
+  allow_implicit_invocation: true

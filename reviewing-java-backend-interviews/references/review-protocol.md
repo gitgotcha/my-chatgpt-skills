@@ -1,19 +1,9 @@
-# 统一复盘协议
+# 复盘快照协议
 
-模拟和真实会话均使用同一 schema-1.2 Review 结构。区别只在 `interviewType`（`mock` 或 `real`）、`evidenceType`（`full_transcript`、`partial_transcript`、`user_recall`、`structured_notes`、`live_notes`）及 `evidenceConfidence`（`high`、`medium`、`low`）。低可信回忆不能与完整转写等权；清洗转写时只删除无意义口头语，歧义必须标记。
+面试复盘数据按 [RDS-JBryon 运行契约](../../references/rds-jbryon-runtime.md) 保存为 JSON 快照。项目学习/项目面试复用 `project/<slug>/学习快照.json`；其它复盘使用用户确认的 `interview/reviews/<name>.json`。只复盘当前对话、用户提供的 transcript/notes，或用户明确选定路径可读取的记录。
 
-逐题记录 `questionId`、考察意图、正确性、完整性、遗漏、错误、失分归因、更优口语回答、完整参考答案、表达分析和变式复测。逐题领域以实际问题内容为准；真实面试的算法问题按算法标准复盘，即使简历是 Java 后端。
+逐题保留原始问题、原回答、追问/补答时间线、证据类型与可信度、正确性、完整性、错误、遗漏、失分归因、参考回答和下一步复测。修订时追加更高版本，不覆盖原复盘。模拟面试的画像变化可按既有规则写入；真实面试的画像变化先征求用户确认。
 
-## 复盘顺序
+项目题按 `project-campus-v1` 评分，证据不足时标为 `unscored`；不能用提高 review version 冒充新一轮作答。练习复盘、真实复盘、复测作答分别标记来源，不把教练写的参考答案混入用户原答。
 
-1. 按姓名解析用户，取得 `{userId, username}` 绑定。
-2. 读取目标会话与已有复盘版本，构造唯一 `interview.review.completed` 事件。
-3. 只调用一次 `submit_event`；Worker 追加事件到 `users/<userId>/interview/events/`。
-4. Worker 物化快照到 `users/<userId>/interview/profile/snapshots/`；本 Skill 不创建快照。
-5. 生成本地 JSON 与 DOCX 报告并做渲染检查。
-
-模拟 Review 自动应用画像变化；真实 Review 默认生成待确认的预览，用户确认后应用，拒绝后保持 `rejected` 且不改变画像。提交回执按 `deliveryState` 记录为 `cloud_accepted`（D1 Outbox 已接收）或 `pending`（SQLite 持久排队）；两者都不得将本地文件或队列回执冒充 Drive 已完成。
-
-## 修正与版本
-
-修正产生新的不可变 `reviewVersion`，不覆盖旧版本。Worker 重建时按 `sessionId` 只取最大 `reviewVersion`，因此历史修正自动生效，无需重放事件或切换当前画像。
+JSON 与 DOCX 报告只作为本地派生文件输出；不得自动上传 transcript、DOCX 或其它附件。只有快照状态实际返回 `projected` 才报告云端记录完成。

@@ -76,23 +76,18 @@ class JavaResumeKnowledgeSkillContractTests(unittest.TestCase):
         for required in ("简历初始化", "逐题学习", "每日练习", "掌握度查看"):
             self.assertIn(required, skill)
 
-    # ------------------------------------------------------------- identity
+    # ---------------------------------------------------------- persistence
 
-    def test_skill_resolves_the_user_by_name_through_submit_event(self):
+    def test_skill_uses_the_single_user_readable_rds_route(self):
         skill = self._skill()
-        for required in ("姓名", "submit_event", "userId", "解析", "注册"):
+        for required in ("RDS-JBryon", "`rds`", "knowledge/java/resume-interview/学习快照.json", "不解析账户"):
             self.assertIn(required, skill)
 
-    def test_skill_uses_the_canonical_plugin_root(self):
-        for required in (
-            "my-chatGPT-skills/",
-            "users/<userId>/resume-knowledge/",
-            "sources/resume/snapshots/",
-            "question-bank/snapshots/",
-            "profile/snapshots/",
-            "plans/daily/",
-        ):
-            self.assertIn(required, self._read("profile-storage-contract.md"))
+    def test_skill_does_not_ask_for_identity_or_store_the_resume_file(self):
+        skill = self._skill()
+        self.assertNotIn("userId", skill)
+        self.assertNotIn("submit_event", skill)
+        self.assertIn("不上传简历原文件", skill)
 
     # ------------------------------------------------------------- evidence
 
@@ -174,15 +169,17 @@ class JavaResumeKnowledgeSkillContractTests(unittest.TestCase):
 
     # --------------------------------------------------------- write access
 
-    def test_submit_event_is_the_only_write_path(self):
+    def test_rds_jbryon_is_the_only_cross_session_write_path(self):
         for path in documents():
-            self.assertIn("submit_event", path.read_text(encoding="utf-8"), path.name)
+            text = path.read_text(encoding="utf-8")
+            if path.suffix == ".md" or path.name == "openai.yaml":
+                self.assertNotIn("submit_event", text, path.name)
 
-    def test_skill_uses_local_and_cloud_outbox_receipts_without_claiming_drive_completion(self):
+    def test_skill_reports_only_authoritative_projection_without_claiming_drive_completion(self):
         skill = self._skill()
-        for required in ("deliveryState", "cloud_accepted", "pending", "SQLite", "D1 Outbox"):
+        for required in ("projected", "RDS-JBryon", "快照"):
             self.assertIn(required, skill)
-        self.assertIn("不得称“Drive 已保存”", skill)
+        self.assertNotIn("Drive 已保存", skill)
 
     def test_no_document_writes_to_google_drive_directly(self):
         for path in documents():

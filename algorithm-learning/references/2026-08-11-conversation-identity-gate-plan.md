@@ -1,3 +1,5 @@
+> **历史归档，不可执行（2026-10-28）：** 本文描述的 Google Drive、UUID 身份门禁与事件流已被单用户 RDS-JBryon 可读路径 JSON 快照取代。当前规则见 [RDS-JBryon runtime contract](../../references/rds-jbryon-runtime.md)；不得照本文创建用户、Drive 资源或自动化。
+
 # 对话级身份门禁与即时画像更新计划书
 
 > **Archived / superseded.** 本文是规范化之前的历史实施计划；其中的路径与流程属于历史状态，MUST NOT be used for writes。当前契约见 [algorithm-profile-contract.md](algorithm-profile-contract.md)。

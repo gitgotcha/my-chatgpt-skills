@@ -7,6 +7,7 @@
   "required": [
     "schemaVersion",
     "domain",
+    "route",
     "sourceSkill",
     "dimensions",
     "evidencePolicy",
@@ -14,14 +15,33 @@
     "portability"
   ],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": {
+      "const": "1.1"
+    },
     "domain": {
       "type": "string",
       "minLength": 2,
       "maxLength": 64,
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$",
       "not": {
-        "enum": ["algorithm", "interview", "resume-knowledge", "system", "profile"]
+        "enum": [
+          "algorithm",
+          "interview",
+          "resume-knowledge",
+          "system",
+          "profile"
+        ]
+      }
+    },
+    "route": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[^/\\\\]+$"
       }
     },
     "sourceSkill": {
@@ -37,7 +57,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["dimensionKey", "subjectKeyDescription", "description"],
+        "required": [
+          "dimensionKey",
+          "subjectKeyDescription",
+          "description"
+        ],
         "properties": {
           "dimensionKey": {
             "type": "string",
@@ -45,8 +69,14 @@
             "maxLength": 64,
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$"
           },
-          "subjectKeyDescription": { "type": "string", "minLength": 1 },
-          "description": { "type": "string", "minLength": 1 }
+          "subjectKeyDescription": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -64,12 +94,18 @@
         "recordWhen": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "doNotRecordWhen": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "allowedOutcomes": {
           "const": [
@@ -84,8 +120,14 @@
             "failed"
           ]
         },
-        "sourceRefPolicy": { "type": "string", "minLength": 1 },
-        "minimumEvidenceTextLength": { "type": "integer", "minimum": 1 }
+        "sourceRefPolicy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minimumEvidenceTextLength": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "runtime": {
@@ -93,30 +135,52 @@
       "additionalProperties": false,
       "required": [
         "tool",
-        "capabilitiesEvent",
-        "identityResolveEvent",
-        "identityRegisterEvent",
-        "profileReadEvent",
-        "evidenceWriteEvent",
+        "readOperation",
+        "writeOperation",
+        "routePolicy",
+        "accountIdentityResolution",
         "directDriveAccess"
       ],
       "properties": {
-        "tool": { "const": "submit_event" },
-        "capabilitiesEvent": { "const": "capabilities" },
-        "identityResolveEvent": { "const": "user.resolve" },
-        "identityRegisterEvent": { "const": "admin_only" },
-        "profileReadEvent": { "const": "projection.read" },
-        "evidenceWriteEvent": { "const": "profile.evidence.recorded" },
-        "directDriveAccess": { "const": false }
+        "tool": {
+          "const": "rds"
+        },
+        "readOperation": {
+          "const": "snapshot.read"
+        },
+        "writeOperation": {
+          "const": "snapshot.patch"
+        },
+        "routePolicy": {
+          "const": "user-readable-path"
+        },
+        "accountIdentityResolution": {
+          "const": false
+        },
+        "directDriveAccess": {
+          "const": false
+        }
       }
     },
     "portability": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platforms", "coreContractDependsOnOpenaiYaml"],
+      "required": [
+        "platforms",
+        "coreContractDependsOnOpenaiYaml"
+      ],
       "properties": {
-        "platforms": { "const": ["codex", "chatgpt", "claude", "workbuddy"] },
-        "coreContractDependsOnOpenaiYaml": { "const": false }
+        "platforms": {
+          "const": [
+            "codex",
+            "chatgpt",
+            "claude",
+            "workbuddy"
+          ]
+        },
+        "coreContractDependsOnOpenaiYaml": {
+          "const": false
+        }
       }
     }
   }

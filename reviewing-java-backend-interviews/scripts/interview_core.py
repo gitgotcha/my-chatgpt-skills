@@ -1,9 +1,8 @@
-"""Deterministic validation and local persistence for interview review artifacts.
+"""Deterministic validation and local copies of interview review snapshots.
 
-The active profile reducer lives in the Reliable Drive Sync Worker
-(``services/reliable-drive-sync-worker/src/profile-model.js``).
-This module only builds and validates schema-1.2 review events, writes the local report copy,
-and keeps the domain/source planning helpers free of cloud assumptions.
+RDS-JBryon persistence is performed by the Skill through readable routes. This
+module only assembles content and a local report copy; it never resolves a
+person, creates an event envelope, or claims that the cloud save completed.
 """
 
 from __future__ import annotations
@@ -15,41 +14,35 @@ from math import floor
 from pathlib import Path
 import re
 
-REVIEW_SCHEMA_VERSION = "1.2"
+REVIEW_SCHEMA_VERSION = "interview-review-snapshot/2"
 
 _UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
-_SESSION_ID = re.compile(r"^(?:MOCK|REAL)-[^/\\]+$")
+_SESSION_ID = re.compile(r"^(?:MOCK|REAL|LEARN)-[^/\\]+$")
 _EVIDENCE_TYPES = {"full_transcript", "partial_transcript", "user_recall", "structured_notes", "live_notes"}
 _EVIDENCE_CONFIDENCE = {"high", "medium", "low"}
-_QUESTION_REVIEW_KEYS = {"questionId", "assessment", "evidence", "recommendations"}
+_QUESTION_REVIEW_KEYS = {"questionId", "assessment", "evidence", "recommendations", "projectAssessment"}
 _PROFILE_CHANGE_KEYS = {
     "kind", "outcome", "domain", "weaknessId", "variantId", "competencyId", "title", "evidenceRefs",
 }
 
 
 class ReviewValidationError(ValueError):
-    """Raised when a schema-1.2 review event is unsafe to submit."""
+    """Raised when review snapshot content violates its contract."""
 
-
-def _require_identity(identity: dict[str, object]) -> tuple[str, str]:
-    if not isinstance(identity, dict) or identity.get("verified") is not True:
-        raise ReviewValidationError("verified identity is required")
-    user_id = identity.get("userId")
-    username = identity.get("username")
-    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
-        raise ReviewValidationError("verified identity requires a UUID userId")
-    if not isinstance(username, str) or not username.strip():
-        raise ReviewValidationError("verified identity requires a username")
-    return user_id, username.strip()
+    def __init__(self, message: str, code: str | None = None) -> None:
+        super().__init__(message)
+        # Stable machine code; older call sites only pass a message, and the
+        # message itself is stable there, so the default keeps their behavior.
+        self.code = code or message
 
 
 def _require_iso(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ReviewValidationError(f"{field} must be an ISO-8601 string")
-    # Cloud event timestamps must be unambiguous instants, never local/naive time.
+    # Timestamps must identify an unambiguous instant, never naive local time.
     if not re.fullmatch(
         r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
         value,
@@ -64,33 +57,35 @@ def _require_iso(value: object, field: str) -> str:
     return value
 
 
-def _require_session(session: dict[str, object], user_id: str, username: str) -> tuple[str, str, str, list[dict[str, object]]]:
-    if not isinstance(session, dict) or session.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
-        raise ReviewValidationError("session must use schemaVersion 1.2")
-    if session.get("eventType") != "interview.session.completed":
-        raise ReviewValidationError("source session must be completed")
-    if session.get("userId") != user_id or str(session.get("username", "")).strip() != username:
-        raise ReviewValidationError("identity does not match source session")
+def _require_session(session: dict[str, object]) -> tuple[str, str, str, list[dict[str, object]]]:
+    if not isinstance(session, dict) or session.get("schemaVersion") != "interview-session-snapshot/2":
+        raise ReviewValidationError("source must use interview-session-snapshot/2")
     session_id = session.get("sessionId")
     if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
-        raise ReviewValidationError("sessionId must use MOCK-/REAL- and contain no path separators")
+        raise ReviewValidationError("sessionId must use MOCK-/REAL-/LEARN- and contain no path separators")
     source_type = session.get("interviewType")
-    if source_type not in {"mock", "real"}:
-        raise ReviewValidationError("session interviewType must be mock or real")
+    if source_type not in {"mock", "real", "project_learning"}:
+        raise ReviewValidationError("session interviewType must be mock, real or project_learning")
+    expected_prefix = {"mock": "MOCK-", "real": "REAL-", "project_learning": "LEARN-"}[source_type]
+    if not session_id.startswith(expected_prefix):
+        raise ReviewValidationError("sessionId prefix must match interviewType")
+    contract_version = session.get("projectContractVersion")
+    if contract_version not in (None, 1):
+        raise ReviewValidationError("projectContractVersion must be 1", "project_contract_version_unsupported")
+    if source_type == "project_learning" and contract_version != 1:
+        raise ReviewValidationError(
+            "project_learning requires projectContractVersion 1", "project_contract_version_unsupported"
+        )
     questions = session.get("questions")
     if not isinstance(questions, list) or not all(isinstance(item, dict) for item in questions):
         raise ReviewValidationError("source session questions must be a list")
-    event_id = session.get("eventId")
-    if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
-        raise ReviewValidationError("source session eventId must be a UUID")
     domain = session.get("domain")
     if not isinstance(domain, str) or not domain.strip():
         raise ReviewValidationError("session domain must be a non-empty string")
     return session_id, source_type, domain.strip(), questions
 
 
-def create_review_event(
-    identity: dict[str, object],
+def create_review_snapshot(
     session: dict[str, object],
     *,
     question_reviews: list[dict[str, object]],
@@ -98,18 +93,14 @@ def create_review_event(
     recommendations: list[str],
     apply_profile_changes: bool | None = None,
     review_version: int,
-    event_id: str,
     completed_at: str,
     evidence_type: str = "full_transcript",
     evidence_confidence: str = "high",
 ) -> dict[str, object]:
-    """Build one immutable schema-1.2 ``interview.review.completed`` event."""
-    user_id, username = _require_identity(identity)
-    session_id, source_type, domain, source_questions = _require_session(session, user_id, username)
+    """Build one review record linked to a source session by its readable ID."""
+    session_id, source_type, domain, source_questions = _require_session(session)
     if type(review_version) is not int or review_version < 1:
         raise ReviewValidationError("reviewVersion must be a positive integer")
-    if not isinstance(event_id, str) or not _UUID.fullmatch(event_id):
-        raise ReviewValidationError("eventId must be a UUID")
     _require_iso(completed_at, "completedAt")
     if evidence_type not in _EVIDENCE_TYPES:
         raise ReviewValidationError("unsupported evidenceType")
@@ -118,6 +109,7 @@ def create_review_event(
     if not isinstance(question_reviews, list) or not all(isinstance(item, dict) for item in question_reviews):
         raise ReviewValidationError("questionReviews must be a list of objects")
     source_ids = {item.get("questionId") for item in source_questions}
+    questions_by_id = {item.get("questionId"): item for item in source_questions}
     seen_ids: set[object] = set()
     for item in question_reviews:
         unknown = set(item) - _QUESTION_REVIEW_KEYS
@@ -137,6 +129,8 @@ def create_review_event(
             isinstance(value, str) and value.strip() for value in item_recommendations
         ):
             raise ReviewValidationError("questionReviews require recommendations")
+        if "projectAssessment" in item:
+            validate_project_assessment(item, questions_by_id[question_id])
         seen_ids.add(question_id)
     if not isinstance(profile_changes, list) or not all(isinstance(item, dict) for item in profile_changes):
         raise ReviewValidationError("profileChanges must be a list of objects")
@@ -167,18 +161,17 @@ def create_review_event(
         if not isinstance(apply_profile_changes, bool):
             raise ReviewValidationError("real review requires explicit applyProfileChanges confirmation")
         applies = apply_profile_changes
-    return {
+    if session.get("projectContractVersion") == 1 and source_type == "project_learning" and profile_changes:
+        raise ReviewValidationError(
+            "project_learning reviews may not carry profileChanges", "invalid_project_evidence"
+        )
+    snapshot = {
         "schemaVersion": REVIEW_SCHEMA_VERSION,
-        "eventId": event_id,
-        "eventKey": f"{user_id}:interview:review:{session_id}:v{review_version}",
-        "eventType": "interview.review.completed",
-        "userId": user_id,
-        "username": username,
         "sessionId": session_id,
         "interviewType": source_type,
         "domain": domain,
         "reviewVersion": review_version,
-        "sourceSessionEventId": session["eventId"],
+        "sourceSessionId": session_id,
         "sourceType": source_type,
         "evidenceType": evidence_type,
         "evidenceConfidence": evidence_confidence,
@@ -188,32 +181,25 @@ def create_review_event(
         "applyProfileChanges": applies,
         "completedAt": completed_at,
     }
+    if session.get("projectContractVersion") == 1:
+        snapshot["projectContractVersion"] = 1
+    return snapshot
 
 
 def save_review_json(
-    review_event: dict[str, object],
+    review_snapshot: dict[str, object],
     output_root: str | Path,
-    persistence_status: str,
-    outbox_receipt: dict[str, object] | None = None,
 ) -> Path:
-    """Write a portable local report JSON; it is never a profile input."""
-    if not isinstance(review_event, dict) or review_event.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
-        raise ReviewValidationError("review event must use schemaVersion 1.2")
-    user_id = review_event.get("userId")
-    session_id = review_event.get("sessionId")
-    if not isinstance(user_id, str) or not _UUID.fullmatch(user_id):
-        raise ReviewValidationError("review event requires a UUID userId")
+    """Write a local report copy; it does not confirm an RDS-JBryon save."""
+    if not isinstance(review_snapshot, dict) or review_snapshot.get("schemaVersion") != REVIEW_SCHEMA_VERSION:
+        raise ReviewValidationError("review snapshot must use interview-review-snapshot/2")
+    session_id = review_snapshot.get("sessionId")
     if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
-        raise ReviewValidationError("review event requires a safe sessionId")
-    if persistence_status not in {"cloud_accepted", "pending"}:
-        raise ReviewValidationError("unsupported persistenceStatus")
-    destination = Path(output_root) / "interview" / user_id
+        raise ReviewValidationError("review snapshot requires a safe sessionId")
+    destination = Path(output_root) / "interview"
     destination.mkdir(parents=True, exist_ok=True)
     path = destination / f"interview-{session_id}-report.json"
-    payload = deepcopy(review_event)
-    payload["persistenceStatus"] = persistence_status
-    if outbox_receipt is not None:
-        payload["outboxReceipt"] = deepcopy(outbox_receipt)
+    payload = deepcopy(review_snapshot)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -264,3 +250,295 @@ def plan_question_sources(has_resume: bool, total_questions: int) -> dict[str, i
         "domain_knowledge": 45,
         "algorithm_and_scenario": 20,
     })
+
+# ---------------------------------------------------------------------------
+# Project interview contract v1 (design 2026-10-24, §5).
+#
+# The Worker owns the accepting boundary; this mirror exists so the Python
+# builders refuse exactly what the server would refuse, which keeps local
+# artifacts and the cloud contract from drifting apart. Pure: no I/O.
+# ---------------------------------------------------------------------------
+
+PROJECT_CONTRACT_VERSION = 1
+PROJECT_RUBRIC_VERSION = "project-campus-v1"
+PROJECT_SCORE_CAPS = {
+    "technical": 30,
+    "projectEvidence": 25,
+    "causal": 20,
+    "tradeoff": 15,
+    "expression": 10,
+}
+PROJECT_PASS_MINIMUMS = {"total": 80, "technical": 24, "projectEvidence": 18, "causal": 14}
+MAX_PROJECT_ENVELOPE_BYTES = 48 * 1024
+MAX_PROJECT_QUESTION_BYTES = 24 * 1024
+MAX_PROJECT_ASSESSMENT_BYTES = 8 * 1024
+PROJECT_BASIS_KINDS = {"resume_claim", "user_confirmed", "source_learning"}
+PROJECT_PURPOSES = {"initial_assessment", "targeted_retest"}
+PROJECT_ANSWER_ORIGINS = {"actual_user", "user_recall"}
+PROJECT_ASSISTANCE = {"none", "hint", "answer_shown"}
+PROJECT_ASSESSMENT_OUTCOMES = {"passed", "partial", "failed", "unscored"}
+PROJECT_WEAKNESS_OUTCOMES = {"failed", "passed", "observed"}
+PROJECT_SOURCE_SKILLS = {
+    "software-project-learning",
+    "conducting-java-backend-mock-interviews",
+    "reviewing-java-backend-interviews",
+}
+_PROJECT_FIELDS = {"projectId", "displayName", "basis", "resumeVersion", "resumeClaimIds", "sourceRevision"}
+_PROJECT_EVIDENCE_FIELDS = {
+    "project", "attemptId", "questionKey", "variantId", "variantAxes", "purpose",
+    "sourceSkill", "provenance", "sourceRefs",
+}
+_PROJECT_PROVENANCE_FIELDS = {"answerOrigin", "assistance", "exactAnswerSeenBefore", "exposureGroupId"}
+_PROJECT_ASSESSMENT_FIELDS = {
+    "attemptId", "rubricVersion", "scores", "total", "outcome", "evidenceRefs", "reason", "weaknesses",
+}
+_PROJECT_WEAKNESS_FIELDS = {"weaknessId", "title", "outcome"}
+_PROJECT_BASIS_FIELDS = {"kind", "key"}
+_QUESTION_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _project_fail(code: str, detail: str = "") -> None:
+    raise ReviewValidationError(f"{code}:{detail}" if detail else code, code)
+
+
+def _project_bytes(value: object) -> int:
+    return len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def _exact_fields(value: object, fields: set[str]) -> bool:
+    return isinstance(value, dict) and set(value).issubset(fields)
+
+
+def _bounded(value: object, maximum: int) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and len(value) <= maximum
+
+
+def _validate_project_block(project: object) -> None:
+    if not _exact_fields(project, _PROJECT_FIELDS):
+        _project_fail("invalid_project_evidence", "project_fields")
+    if not (isinstance(project["projectId"], str) and _UUID.fullmatch(project["projectId"])):
+        _project_fail("invalid_project_evidence", "project_id")
+    if not _bounded(project["displayName"], 200):
+        _project_fail("invalid_project_evidence", "display_name")
+    basis = project["basis"]
+    if not _exact_fields(basis, _PROJECT_BASIS_FIELDS):
+        _project_fail("invalid_project_evidence", "basis_fields")
+    if basis.get("kind") not in PROJECT_BASIS_KINDS or not _bounded(basis.get("key"), 256):
+        _project_fail("invalid_project_evidence", "basis")
+    resume_version = project["resumeVersion"]
+    if not (resume_version is None or _bounded(resume_version, 128)):
+        _project_fail("invalid_project_evidence", "resume_version")
+    claim_ids = project["resumeClaimIds"]
+    if not isinstance(claim_ids, list) or len(claim_ids) > 50 or not all(isinstance(item, str) for item in claim_ids):
+        _project_fail("invalid_project_evidence", "resume_claim_ids")
+    source_revision = project["sourceRevision"]
+    if not (source_revision is None or _bounded(source_revision, 200)):
+        _project_fail("invalid_project_evidence", "source_revision")
+
+
+def _validate_provenance(provenance: object) -> None:
+    if not _exact_fields(provenance, _PROJECT_PROVENANCE_FIELDS):
+        _project_fail("invalid_project_evidence", "provenance_fields")
+    if provenance.get("answerOrigin") not in PROJECT_ANSWER_ORIGINS:
+        _project_fail("invalid_project_evidence", "answer_origin")
+    if provenance.get("assistance") not in PROJECT_ASSISTANCE:
+        _project_fail("invalid_project_evidence", "assistance")
+    if not isinstance(provenance.get("exactAnswerSeenBefore"), bool):
+        _project_fail("invalid_project_evidence", "exact_answer_seen")
+    if not _bounded(provenance.get("exposureGroupId"), 128):
+        _project_fail("invalid_project_evidence", "exposure_group")
+
+
+def validate_project_question(question: object) -> None:
+    """Validate ``question['projectEvidence']``; raises ReviewValidationError."""
+    evidence = question.get("projectEvidence") if isinstance(question, dict) else None
+    if not isinstance(evidence, dict):
+        _project_fail("invalid_project_evidence", "missing")
+    if not _exact_fields(evidence, _PROJECT_EVIDENCE_FIELDS):
+        _project_fail("invalid_project_evidence", "evidence_fields")
+    _validate_project_block(evidence["project"])
+    if not (isinstance(evidence["attemptId"], str) and _UUID.fullmatch(evidence["attemptId"])):
+        _project_fail("invalid_project_evidence", "attempt_id")
+    if not _QUESTION_KEY.fullmatch(str(evidence.get("questionKey", ""))):
+        _project_fail("invalid_project_evidence", "question_key")
+    if not _bounded(evidence.get("variantId"), 128):
+        _project_fail("invalid_project_evidence", "variant_id")
+    axes = evidence.get("variantAxes")
+    if not isinstance(axes, list) or not 1 <= len(axes) <= 4 or not all(_bounded(axis, 64) for axis in axes):
+        _project_fail("invalid_project_evidence", "variant_axes")
+    if evidence.get("purpose") not in PROJECT_PURPOSES:
+        _project_fail("invalid_project_evidence", "purpose")
+    if evidence.get("sourceSkill") not in PROJECT_SOURCE_SKILLS:
+        _project_fail("invalid_project_evidence", "source_skill")
+    _validate_provenance(evidence["provenance"])
+    refs = evidence.get("sourceRefs")
+    if not isinstance(refs, list) or not 1 <= len(refs) <= 20 or not all(_bounded(ref, 2048) for ref in refs):
+        _project_fail("invalid_project_evidence", "source_refs")
+    if _project_bytes(evidence) > 16 * 1024:
+        _project_fail("invalid_project_evidence", "too_large")
+
+
+def _validate_assessment_shape(assessment: object) -> None:
+    if not _exact_fields(assessment, _PROJECT_ASSESSMENT_FIELDS):
+        _project_fail("invalid_project_evidence", "assessment_fields")
+    if not (isinstance(assessment["attemptId"], str) and _UUID.fullmatch(assessment["attemptId"])):
+        _project_fail("invalid_project_evidence", "assessment_attempt")
+    if assessment.get("rubricVersion") != PROJECT_RUBRIC_VERSION:
+        _project_fail("invalid_project_evidence", "rubric")
+    if assessment.get("outcome") not in PROJECT_ASSESSMENT_OUTCOMES:
+        _project_fail("invalid_project_evidence", "outcome")
+    if not _bounded(assessment.get("reason"), 8000):
+        _project_fail("invalid_project_evidence", "reason")
+    weaknesses = assessment.get("weaknesses")
+    if not isinstance(weaknesses, list) or len(weaknesses) > 20:
+        _project_fail("invalid_project_evidence", "weaknesses")
+    for weakness in weaknesses:
+        if not _exact_fields(weakness, _PROJECT_WEAKNESS_FIELDS):
+            _project_fail("invalid_project_evidence", "weakness_fields")
+        if not _bounded(weakness.get("weaknessId"), 128) or not _bounded(weakness.get("title"), 200):
+            _project_fail("invalid_project_evidence", "weakness")
+        if weakness.get("outcome") not in PROJECT_WEAKNESS_OUTCOMES:
+            _project_fail("invalid_project_evidence", "weakness_outcome")
+    scores = assessment.get("scores")
+    if scores is None:
+        if assessment.get("total") is not None or assessment.get("outcome") != "unscored":
+            _project_fail("invalid_project_evidence", "unscored_inconsistent")
+    else:
+        if not isinstance(scores, dict) or set(scores) != set(PROJECT_SCORE_CAPS):
+            _project_fail("invalid_project_evidence", "scores")
+        for key, cap in PROJECT_SCORE_CAPS.items():
+            value = scores.get(key)
+            if type(value) is not int or not 0 <= value <= cap:
+                _project_fail("invalid_project_evidence", "score_range")
+        total = sum(scores.values())
+        if type(assessment.get("total")) is not int or assessment["total"] != total:
+            _project_fail("invalid_project_evidence", "total")
+        if not 0 <= total <= 100:
+            _project_fail("invalid_project_evidence", "total_range")
+        if assessment.get("outcome") == "unscored":
+            _project_fail("invalid_project_evidence", "unscored_with_scores")
+    if assessment.get("outcome") == "passed":
+        if scores is None:
+            _project_fail("invalid_project_evidence", "pass_threshold")
+        minimums = PROJECT_PASS_MINIMUMS
+        if (assessment["total"] < minimums["total"]
+                or scores["technical"] < minimums["technical"]
+                or scores["projectEvidence"] < minimums["projectEvidence"]
+                or scores["causal"] < minimums["causal"]):
+            _project_fail("invalid_project_evidence", "pass_threshold")
+        if any(weakness.get("outcome") == "failed" for weakness in assessment["weaknesses"]):
+            _project_fail("invalid_project_evidence", "pass_with_failed_weakness")
+
+
+def _evidence_targets(question: object) -> set[str]:
+    targets = {"originalAnswer"}
+    timeline = question.get("timeline") if isinstance(question, dict) else None
+    for entry in timeline if isinstance(timeline, list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("messageId"), str) and entry["messageId"].strip():
+            targets.add(f"timeline:{entry['messageId']}")
+    return targets
+
+
+def validate_project_assessment(review_item: object, question: object) -> None:
+    """Validate one ``projectAssessment`` against its question."""
+    assessment = review_item.get("projectAssessment") if isinstance(review_item, dict) else None
+    if not isinstance(assessment, dict):
+        _project_fail("invalid_project_evidence", "missing_assessment")
+    _validate_assessment_shape(assessment)
+    evidence = question.get("projectEvidence") if isinstance(question, dict) else None
+    if not isinstance(evidence, dict):
+        _project_fail("review_source_mismatch", "question_has_no_project_evidence")
+    if assessment["attemptId"] != evidence.get("attemptId"):
+        _project_fail("assessment_question_mismatch", "attempt")
+    refs = assessment.get("evidenceRefs")
+    if not isinstance(refs, list) or not 1 <= len(refs) <= 20:
+        _project_fail("assessment_evidence_unresolvable", "missing")
+    targets = _evidence_targets(question)
+    prefix = f"{review_item.get('questionId')}:"
+    for ref in refs:
+        if not isinstance(ref, str) or not ref.strip():
+            _project_fail("assessment_evidence_unresolvable", "empty")
+        if not ref.startswith(prefix):
+            _project_fail("assessment_evidence_unresolvable", "question_prefix")
+        if ref[len(prefix):] not in targets:
+            _project_fail("assessment_evidence_unresolvable", "target")
+    if _project_bytes(assessment) > MAX_PROJECT_ASSESSMENT_BYTES:
+        _project_fail("project_envelope_too_large", "assessment")
+
+
+def validate_project_session_event(event: object) -> None:
+    """Session-level rules, mirroring the Worker boundary for project v1."""
+    if event.get("projectContractVersion") != PROJECT_CONTRACT_VERSION:
+        _project_fail("project_contract_version_unsupported", "version")
+    interview_type = event.get("interviewType")
+    prefixes = {"mock": "MOCK-", "real": "REAL-", "project_learning": "LEARN-"}
+    if interview_type not in prefixes:
+        _project_fail("invalid_project_evidence", "interview_type")
+    if not str(event.get("sessionId", "")).startswith(prefixes[interview_type]):
+        _project_fail("invalid_project_evidence", "session_id_prefix")
+    questions = event.get("questions")
+    if not isinstance(questions, list) or not questions:
+        _project_fail("invalid_project_evidence", "questions")
+    project_ids: set[str] = set()
+    question_ids: set[object] = set()
+    attempt_ids: set[str] = set()
+    project_questions = 0
+    for question in questions:
+        if not isinstance(question, dict):
+            _project_fail("invalid_project_evidence", "question")
+        if "projectEvidence" in question:
+            validate_project_question(question)
+            project_questions += 1
+            project_ids.add(question["projectEvidence"]["project"]["projectId"])
+            attempt_id = question["projectEvidence"]["attemptId"]
+            if attempt_id in attempt_ids:
+                _project_fail("attempt_identity_conflict", "duplicate_in_session")
+            attempt_ids.add(attempt_id)
+        question_id = question.get("questionId")
+        if isinstance(question_id, str) and question_id.strip():
+            if question_id in question_ids:
+                _project_fail("invalid_project_evidence", "duplicate_question")
+            question_ids.add(question_id)
+        if _project_bytes(question) > MAX_PROJECT_QUESTION_BYTES:
+            _project_fail("project_envelope_too_large", "question")
+    if project_questions == 0:
+        _project_fail("invalid_project_evidence", "no_project_question")
+    if interview_type == "project_learning":
+        if project_questions != len(questions):
+            _project_fail("invalid_project_evidence", "learning_requires_evidence")
+        if len(project_ids) != 1:
+            _project_fail("invalid_project_evidence", "learning_single_project")
+    if _project_bytes(event) > MAX_PROJECT_ENVELOPE_BYTES:
+        _project_fail("project_envelope_too_large", "event")
+
+
+def validate_project_review_event(event: object) -> None:
+    """Review-level structural rules for project v1."""
+    if event.get("projectContractVersion") != PROJECT_CONTRACT_VERSION:
+        _project_fail("project_contract_version_unsupported", "version")
+    interview_type = event.get("interviewType")
+    prefixes = {"mock": "MOCK-", "real": "REAL-", "project_learning": "LEARN-"}
+    if interview_type not in prefixes:
+        _project_fail("invalid_project_evidence", "interview_type")
+    if not str(event.get("sessionId", "")).startswith(prefixes[interview_type]):
+        _project_fail("invalid_project_evidence", "session_id_prefix")
+    if event.get("sourceType") != interview_type:
+        _project_fail("review_source_mismatch", "source_type")
+    if interview_type == "project_learning" and event.get("profileChanges"):
+        _project_fail("invalid_project_evidence", "learning_profile_changes")
+    seen_questions: set[object] = set()
+    seen_attempts: set[str] = set()
+    for item in event.get("questionReviews", []):
+        question_id = item.get("questionId") if isinstance(item, dict) else None
+        if question_id in seen_questions:
+            _project_fail("assessment_question_mismatch", "duplicate_question")
+        seen_questions.add(question_id)
+        if not isinstance(item, dict) or "projectAssessment" not in item:
+            continue
+        _validate_assessment_shape(item["projectAssessment"])
+        attempt_id = item["projectAssessment"]["attemptId"]
+        if attempt_id in seen_attempts:
+            _project_fail("assessment_question_mismatch", "duplicate_attempt")
+        seen_attempts.add(attempt_id)
+    if _project_bytes(event) > MAX_PROJECT_ENVELOPE_BYTES:
+        _project_fail("project_envelope_too_large", "event")
